@@ -18,6 +18,17 @@ TEST_CASE("Future", "[future][promise]") {
         REQUIRE(future.valid());
         REQUIRE(future.get() == 56);
 
+        SECTION("Get future second time") {
+          try {
+            promise.get_future();
+            REQUIRE(false);
+          } catch (const cf::future_error& error) {
+            REQUIRE(error.ecode() == cf::errc::future_already_retrieved);
+            REQUIRE(error.what() == 
+                    cf::errc_string(cf::errc::future_already_retrieved));
+          }
+        }
+
         SECTION("Future operator =") {
           cf::future<int> future1 = std::move(future);
 
