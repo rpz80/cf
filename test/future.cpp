@@ -2,7 +2,7 @@
 #include "catch.hh"
 #include <cf/cfuture.h>
 
-TEST_CASE("Future", "[future][promise]") {
+TEST_CASE("Future", "[future][promise][basic][single-thread]") {
   cf::future<int> future;
   cf::promise<int> promise;
 

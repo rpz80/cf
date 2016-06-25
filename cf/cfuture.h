@@ -6,6 +6,12 @@
 
 namespace cf {
 
+// This is the void type analogue 
+// future<void> and promis<void> are explicitely forbidden.
+// If you need future just to signal that the async operation is ready,
+// use future<unit> and discard the result.
+struct unit {};
+
 enum class status {
   ready,
   timeout
@@ -69,35 +75,36 @@ public:
 
   void wait() const {
     std::unique_lock<std::mutex> lock(mutex_);
-    cond_.wait(lock, [this] {
-      return satisfied_ == true; 
-    });
+    cond_.wait(lock, [this] { return satisfied_ == true; });
   }
 
   template<typename Rep, typename Period>
   status wait_for(const std::chrono::duration<Rep, Period>& timeout) const {
     std::unique_lock<std::mutex> lock(mutex_);
-    cond_.wait_for(lock, timeout, [this] {
-      return satisfied_ == true;
-    });
+    cond_.wait_for(lock, timeout, [this] { return satisfied_ == true; });
     return satisfied_ ? status::ready : status::timeout;
   }
 
   template<typename Rep, typename Period>
   status wait_until(const std::chrono::duration<Rep, Period>& timeout) const {
     std::unique_lock<std::mutex> lock(mutex_);
-    cond_.wait_until(lock, timeout, [this] {
-      return satisfied_ == true;
-    });
+    cond_.wait_until(lock, timeout, [this] { return satisfied_ == true; });
     return satisfied_ ? status::ready : status::timeout;
   }
 
-  void set_ready() {
+  void set_ready() { 
+    // No lock here, because this should be called 
+    // when mutex has been already locked.
     if (satisfied_)
       throw future_error(errc::promise_already_satisfied, 
-                         errc_string(errc::promise_already_satisfied));
+                        errc_string(errc::promise_already_satisfied));
     satisfied_ = true;
     cond_.notify_all();
+  }
+
+  bool is_ready() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return satisfied_;
   }
 
   void set_exception(std::exception_ptr p) {
@@ -150,15 +157,26 @@ template<typename T>
 using shared_state_ptr = std::shared_ptr<shared_state<T>>;
 
 template<typename T>
-class future_base {
-public:
-  future_base() = default;
+void check_state(const shared_state_ptr<T>& state) {
+  if (!state)
+    throw future_error(errc::no_state, errc_string(errc::no_state));
+}
 
-  future_base(future_base<T>&& other)
+} // namespace detail
+
+template<typename T>
+class future {
+  template<typename U>
+  friend class promise;
+
+public:
+  future() = default;
+
+  future(future<T>&& other)
     : state_(std::move(other.state_))
   {}
 
-  future_base<T>& operator = (future_base<T>&& other) {
+  future<T>& operator = (future<T>&& other) {
     state_ = std::move(other.state_);
     return *this;
   }
@@ -167,118 +185,90 @@ public:
     return state_ != nullptr;
   }
 
+  T get() {
+    check_state(state_);
+    return state_->get_value();
+  }
+  
   void wait() const {
+    check_state(state_);
     if (state_)
       state_->wait();
-    else
-      throw future_error(errc::no_state, errc_string(errc::no_state));
   }
 
   template<typename Rep, typename Period>
   void wait_for(const std::chrono::duration<Rep, Period>& timeout) {
-    if (state_)
-      state_.wait_for(timeout);
-    else
-      throw future_error(errc::no_state, errc_string(errc::no_state));
+    check_state(state_);
+    state_.wait_for(timeout);
   }
 
   template<typename Rep, typename Period>
-  void wait_until(const std::chrono::duration<Rep, Period>& timeout) {
-    if (state_)
-      state_.wait_until(timeout);
-    else
-      throw future_error(errc::no_state, errc_string(errc::no_state));
+  void wait_until(const std::chrono::duration<Rep, Period>& timeout) 
+  {
+    check_state(state_);
+    state_.wait_until(timeout);
   }
 
 protected:
-  future_base(const shared_state_ptr<T>& state)
+  future(const detail::shared_state_ptr<T>& state)
     : state_(state)
   {}
 
+  template<typename F>
+  void set_callback(F&& f) {
+    check_state(state_);
+    state_->set_callback(std::forward<F>(f));
+  }
+
 protected:
-  shared_state_ptr<T> state_;
+  detail::shared_state_ptr<T> state_;
 };
 
 template<typename T>
-class promise_base {
-protected:
-  void check_state() {
-    if (!state_)
-      throw future_error(errc::no_state, errc_string(errc::no_state));
-  }
+class promise {
 public:
-  promise_base() 
-    : state_(std::make_shared<shared_state<T>>()) {}
+  promise() 
+    : state_(std::make_shared<detail::shared_state<T>>()) {}
 
-  promise_base(promise_base&& other)
+  promise(promise&& other)
     : state_(std::move(other.state_)) {}
 
-  promise_base& operator = (promise_base&& other) {
+  promise& operator = (promise&& other) {
     state_ = std::move(other.state_);
     return *this;
   }
 
-  ~promise_base() {
-    check_state();
+  ~promise() {
+    check_state(state_);
     state_->abandon();
   }
 
-  void swap(promise_base& other) noexcept {
+  void swap(promise& other) noexcept {
     state_.swap(other.state_);
   }
 
-  future<T> get_future(); 
+  template<typename U>
+  void set_value(U&& value) {
+    check_state(state_);
+    state_->set_value(std::forward<U>(value));
+  }
+
+  future<T> get_future() {
+    check_state(state_);
+    if (state_.use_count() > 1) {
+      throw future_error(errc::future_already_retrieved,
+                         errc_string(errc::future_already_retrieved));
+    }
+    return future<T>(state_);
+  }
 
   void set_exception(std::exception_ptr p) {
-    check_state();
+    check_state(state_);
     state_->set_exception(p);
   }
 
 protected:
-  shared_state_ptr<T> state_;
+  detail::shared_state_ptr<T> state_;
 };
 
-} // namespace detail
-
-template<typename T>
-class future : public detail::future_base<T> {
-  using base_type = detail::future_base<T>;
-
-  friend class detail::promise_base<T>;
-
-public:
-  using base_type::future_base;
-
-  T get() {
-    if (!base_type::valid())
-      throw errc::no_state;
-    return base_type::state_->get_value();
-  }
-};
-
-template<typename T>
-class promise : public detail::promise_base<T> {
-  using base_type = detail::promise_base<T>;
-public:
-  using base_type::promise_base;
-
-  template<typename U>
-  void set_value(U&& value) {
-    base_type::check_state();
-    base_type::state_->set_value(std::move(value));
-  }
-};
-
-namespace detail {
-
-template<typename T>
-future<T> promise_base<T>::get_future() {
-  check_state();
-  if (state_.use_count() != 1)
-    throw future_error(errc::future_already_retrieved, 
-                       errc_string(errc::future_already_retrieved));
-  return future<T>(state_);
-}
-
-} // namespace detail
 } // namespace cf
