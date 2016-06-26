@@ -2,6 +2,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <memory>
+#include <type_traits>
 #include <stdexcept>
 
 namespace cf {
@@ -97,7 +98,7 @@ public:
     // when mutex has been already locked.
     if (satisfied_)
       throw future_error(errc::promise_already_satisfied, 
-                        errc_string(errc::promise_already_satisfied));
+                         errc_string(errc::promise_already_satisfied));
     satisfied_ = true;
     cond_.notify_all();
   }
@@ -162,12 +163,41 @@ void check_state(const shared_state_ptr<T>& state) {
     throw future_error(errc::no_state, errc_string(errc::no_state));
 }
 
+// various type helpers
+
+// get the return type of a continuation callable
+template<typename T, typename F>
+using then_arg_ret_type = std::result_of_t<std::decay_t<F>(future<T>)>; 
+
+template<typename T>
+struct is_future {
+  const static bool value = false;
+};
+
+template<typename T>
+struct is_future<future<T>> {
+  const static bool value = true;
+};
+
+// future<T>::then(F&& f) return type
+template<typename T, typename F>
+using then_ret_type = std::conditional_t<
+    is_future<then_arg_ret_type<T, F>>::value,  // if f returns future<U>
+    then_arg_ret_type<T, F>,                    // then leave type untouched
+    future<then_arg_ret_type<T,F>> >;           // else lift it into the future type
+
 } // namespace detail
 
 template<typename T>
 class future {
   template<typename U>
   friend class promise;
+
+  template<typename U>
+  friend future<U> make_ready_future(U&& u);
+
+  template<typename U>
+  friend future<U> make_exceptional_future(std::exception_ptr p);
 
 public:
   future() = default;
@@ -189,7 +219,15 @@ public:
     check_state(state_);
     return state_->get_value();
   }
+
+  template<typename F>
+  detail::then_ret_type<T, F> then(F&& f); 
   
+  bool is_ready() const {
+    check_state(state_);
+    return state_->is_ready();
+  }
+
   void wait() const {
     check_state(state_);
     if (state_)
@@ -209,7 +247,7 @@ public:
     state_.wait_until(timeout);
   }
 
-protected:
+private:
   future(const detail::shared_state_ptr<T>& state)
     : state_(state)
   {}
@@ -220,7 +258,7 @@ protected:
     state_->set_callback(std::forward<F>(f));
   }
 
-protected:
+private:
   detail::shared_state_ptr<T> state_;
 };
 
@@ -256,7 +294,7 @@ public:
   future<T> get_future() {
     check_state(state_);
     if (state_.use_count() > 1) {
-      throw future_error(errc::future_already_retrieved,
+      throw future_error(errc::future_already_retrieved, 
                          errc_string(errc::future_already_retrieved));
     }
     return future<T>(state_);
@@ -267,8 +305,40 @@ public:
     state_->set_exception(p);
   }
 
-protected:
+private:
   detail::shared_state_ptr<T> state_;
 };
+
+template<typename U>
+future<U> make_ready_future(U&& u) {
+  detail::shared_state_ptr<U> state = 
+    std::make_shared<detail::shared_state<U>>();
+  state->set_value(std::forward<U>(u));
+  return future<U>(state);
+}
+
+template<typename U>
+future<U> make_exceptional_future(std::exception_ptr p) {
+  detail::shared_state_ptr<U> state = 
+    std::make_shared<detail::shared_state<U>>();
+  state->set_exception(p);
+  return future<U>(state);
+}
+
+template<typename T>
+template<typename F>
+detail::then_ret_type<T, F> future<T>::then(F&& f) {
+  using R = then_arg_ret_type<T, F>;
+  using this_future_type = future<T>;
+
+  promise<R> p;
+  future<R> ret = p.get_future();
+
+  auto callback = [this, p_ = std::move(p), f_ = std::forward<F>(f)] {
+    p_->set_value(f_(*this));
+  };
+
+  return ret;
+}
 
 } // namespace cf

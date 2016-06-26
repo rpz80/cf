@@ -1,6 +1,55 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hh"
+#include <type_traits>
 #include <cf/cfuture.h>
+
+// aux stuff for types tests
+int foo(const cf::future<char>&);
+double foo1(cf::future<int>);
+cf::future<double> foo3(cf::future<int>);
+
+auto foo2 = [](const cf::future<bool>&) { return 0; };
+
+struct baz { };
+struct test_struct {
+  cf::unit bar1(cf::future<baz>) {return cf::unit(); };
+};
+
+TEST_CASE("Types", "[future]") {
+  SECTION("Callable return type") {
+    test_struct ts;
+    auto ts_bar1 = std::bind(&test_struct::bar1, &ts, std::placeholders::_1);
+
+    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type
+        <char, decltype(foo)>>::value) == true);
+    REQUIRE((std::is_same<double, cf::detail::then_arg_ret_type
+        <int, decltype(foo1)>>::value) == true);
+    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type
+        <bool, decltype(foo2)>>::value) == true);
+    REQUIRE((std::is_same<cf::unit, cf::detail::then_arg_ret_type
+        <baz, decltype(ts_bar1)>>::value) == true);
+    REQUIRE((std::is_same<cf::future<double>, cf::detail::then_arg_ret_type
+        <int, decltype(foo3)>>::value) == true);
+  }
+
+  SECTION("Is future check") {
+    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type
+        <char, decltype(foo)>>::value) == false);
+    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type
+        <int, decltype(foo3)>>::value) == true);
+  }
+
+  SECTION("Get return type for future::then") {
+    using namespace cf::detail;
+    using then_ret_type_for_foo = then_ret_type<char, decltype(foo)>;
+    REQUIRE((std::is_same<then_ret_type_for_foo, 
+                          cf::future<int>>::value) == true);
+
+    using then_ret_type_for_foo3 = then_ret_type<int, decltype(foo3)>;
+    REQUIRE((std::is_same<then_ret_type_for_foo3, 
+                          cf::future<double>>::value) == true);
+  }
+}
 
 TEST_CASE("Future", "[future][promise][basic][single-thread]") {
   cf::future<int> future;
@@ -54,7 +103,7 @@ TEST_CASE("Future", "[future][promise][basic][single-thread]") {
         } catch (const cf::future_error& error) {
           REQUIRE(error.ecode() == cf::errc::promise_already_satisfied);
           REQUIRE(error.what() == 
-                  cf::errc_string(cf::errc::promise_already_satisfied));
+            cf::errc_string(cf::errc::promise_already_satisfied));
         }
       }
     } // set value
@@ -84,5 +133,21 @@ TEST_CASE("Future", "[future][promise][basic][single-thread]") {
       }
     } // set exception
 
+  }
+}
+
+TEST_CASE("Make future functions", "[future]") {
+  SECTION("Make ready") {
+    cf::future<int> f = cf::make_ready_future(42);
+    REQUIRE(f.is_ready());
+    REQUIRE(f.valid());
+    REQUIRE(f.get() == 42);
+  }
+  SECTION("Make excetion") {
+    cf::future<int> f = cf::make_exceptional_future<int>(
+        std::make_exception_ptr(std::logic_error("whatever")));
+    REQUIRE(f.is_ready());
+    REQUIRE(f.valid());
+    REQUIRE_THROWS(f.get());
   }
 }
