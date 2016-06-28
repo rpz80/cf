@@ -114,6 +114,18 @@ public:
     set_ready();
   }
 
+  bool has_exception() const
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return exception_ptr_ == nullptr;
+  }
+
+  std::exception_ptr get_exception() const
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return exception_ptr_;
+  }
+
   void abandon() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (satisfied_)
@@ -132,18 +144,21 @@ protected:
 };
 
 template<typename T>
-class shared_state : public shared_state_base {
+class shared_state : public shared_state_base 
+{
   using value_type = T;
 
 public:
   template<typename U>
-  void set_value(U&& value) {
+  void set_value(U&& value) 
+  {
     std::lock_guard<std::mutex> lock(mutex_);
     set_ready();
     value_ = std::forward<U>(value);
   }
 
-  value_type get_value() const {
+  value_type get_value() const 
+  {
     wait();
     if (exception_ptr_)
       std::rethrow_exception(exception_ptr_);
@@ -248,6 +263,17 @@ public:
   }
 
 private:
+  template<typename F>
+  typename std::enable_if<
+    detail::is_future<
+      then_ret_type<T, F>
+    >::value,
+    then_ret_type<T,F>
+  >::type
+  then_impl(F&& f);
+
+
+private:
   future(const detail::shared_state_ptr<T>& state)
     : state_(state)
   {}
@@ -291,16 +317,21 @@ public:
     state_->set_value(std::forward<U>(value));
   }
 
-  future<T> get_future() {
+  future<T> get_future() 
+  {
     check_state(state_);
-    if (state_.use_count() > 1) {
-      throw future_error(errc::future_already_retrieved, 
-                         errc_string(errc::future_already_retrieved));
+    if (state_.use_count() > 1) 
+    {
+      throw future_error(
+        errc::future_already_retrieved, 
+        errc_string(errc::future_already_retrieved)
+      );
     }
     return future<T>(state_);
   }
 
-  void set_exception(std::exception_ptr p) {
+  void set_exception(std::exception_ptr p) 
+  {
     check_state(state_);
     state_->set_exception(p);
   }
@@ -310,7 +341,8 @@ private:
 };
 
 template<typename U>
-future<U> make_ready_future(U&& u) {
+future<U> make_ready_future(U&& u) 
+{
   detail::shared_state_ptr<U> state = 
     std::make_shared<detail::shared_state<U>>();
   state->set_value(std::forward<U>(u));
@@ -318,7 +350,8 @@ future<U> make_ready_future(U&& u) {
 }
 
 template<typename U>
-future<U> make_exceptional_future(std::exception_ptr p) {
+future<U> make_exceptional_future(std::exception_ptr p) 
+{
   detail::shared_state_ptr<U> state = 
     std::make_shared<detail::shared_state<U>>();
   state->set_exception(p);
@@ -327,18 +360,43 @@ future<U> make_exceptional_future(std::exception_ptr p) {
 
 template<typename T>
 template<typename F>
-detail::then_ret_type<T, F> future<T>::then(F&& f) {
+typename std::enable_if<
+  detail::is_future<
+    then_ret_type<T, F>
+  >::value,
+  then_ret_type<T,F>
+>::type
+future<T>::then_impl(F&& f)
+{
   using R = then_arg_ret_type<T, F>;
   using this_future_type = future<T>;
 
   promise<R> p;
   future<R> ret = p.get_future();
 
-  auto callback = [this, p_ = std::move(p), f_ = std::forward<F>(f)] {
-    p_->set_value(f_(*this));
-  };
+  auto callback = [p_ = std::move(p), f = std::forward<F>(f)]
+  (shared_state<T>* state)
+  {
+    if (state->has_exception())
+      p_->set_exception(state->get_exception());
+    else
+    {
+      auto inner_f = f_(state->get_value());
+      try
+      {
+
+      }
+    }
+  }
 
   return ret;
+}
+
+template<typename T>
+template<typename F>
+detail::then_ret_type<T, F> future<T>::then(F&& f) 
+{
+
 }
 
 } // namespace cf
