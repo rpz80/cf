@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 project("cf")
-set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -pedantic")
+set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -pedantic /EHsc")
 
 set(INCLUDES "${CMAKE_SOURCE_DIR}")
 
