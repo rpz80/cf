@@ -20,34 +20,25 @@ TEST_CASE("Types", "[future]") {
     test_struct ts;
     auto ts_bar1 = std::bind(&test_struct::bar1, &ts, std::placeholders::_1);
 
-    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type
-        <char, decltype(foo)>>::value) == true);
-    REQUIRE((std::is_same<double, cf::detail::then_arg_ret_type
-        <int, decltype(foo1)>>::value) == true);
-    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type
-        <bool, decltype(foo2)>>::value) == true);
-    REQUIRE((std::is_same<cf::unit, cf::detail::then_arg_ret_type
-        <baz, decltype(ts_bar1)>>::value) == true);
-    REQUIRE((std::is_same<cf::future<double>, cf::detail::then_arg_ret_type
-        <int, decltype(foo3)>>::value) == true);
+    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type<char, decltype(foo)>>::value) == true);
+    REQUIRE((std::is_same<double, cf::detail::then_arg_ret_type<int, decltype(foo1)>>::value) == true);
+    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type<bool, decltype(foo2)>>::value) == true);
+    REQUIRE((std::is_same<cf::unit, cf::detail::then_arg_ret_type<baz, decltype(ts_bar1)>>::value) == true);
+    REQUIRE((std::is_same<cf::future<double>, cf::detail::then_arg_ret_type<int, decltype(foo3)>>::value) == true);
   }
 
   SECTION("Is future check") {
-    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type
-        <char, decltype(foo)>>::value) == false);
-    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type
-        <int, decltype(foo3)>>::value) == true);
+    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type<char, decltype(foo)>>::value) == false);
+    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type<int, decltype(foo3)>>::value) == true);
   }
 
   SECTION("Get return type for future::then") {
     using namespace cf::detail;
     using then_ret_type_for_foo = then_ret_type<char, decltype(foo)>;
-    REQUIRE((std::is_same<then_ret_type_for_foo, 
-                          cf::future<int>>::value) == true);
+    REQUIRE((std::is_same<then_ret_type_for_foo, cf::future<int>>::value) == true);
 
     using then_ret_type_for_foo3 = then_ret_type<int, decltype(foo3)>;
-    REQUIRE((std::is_same<then_ret_type_for_foo3, 
-                          cf::future<double>>::value) == true);
+    REQUIRE((std::is_same<then_ret_type_for_foo3, cf::future<double>>::value) == true);
   }
 }
 
@@ -73,8 +64,7 @@ TEST_CASE("Future", "[future][promise][basic][single-thread]") {
             REQUIRE(false);
           } catch (const cf::future_error& error) {
             REQUIRE(error.ecode() == cf::errc::future_already_retrieved);
-            REQUIRE(error.what() == 
-                    cf::errc_string(cf::errc::future_already_retrieved));
+            REQUIRE(error.what() == cf::errc_string(cf::errc::future_already_retrieved));
           }
         }
 
@@ -145,9 +135,24 @@ TEST_CASE("Make future functions", "[future]") {
   }
   SECTION("Make excetion") {
     cf::future<int> f = cf::make_exceptional_future<int>(
-        std::make_exception_ptr(std::logic_error("whatever")));
+      std::make_exception_ptr(std::logic_error("whatever")));
     REQUIRE(f.is_ready());
     REQUIRE(f.valid());
     REQUIRE_THROWS(f.get());
+  }
+}
+
+cf::future<double> tfoo(cf::future<int> f) {
+  return cf::make_ready_future<double>(f.get());
+}
+
+TEST_CASE("Then simple test") {
+  SECTION("Single thread") {
+    auto cont = [](cf::future<int> f) -> cf::future<double> {
+      return cf::make_ready_future<double>(f.get());
+    };
+    auto result = cf::make_ready_future<int>(5)
+      .then(&tfoo);
+    REQUIRE(result.get() == 5.0);
   }
 }

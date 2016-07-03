@@ -4,6 +4,7 @@
 #include <memory>
 #include <type_traits>
 #include <stdexcept>
+#include <functional>
 
 namespace cf {
 
@@ -66,7 +67,9 @@ class future;
 
 namespace detail {
 
+template<typename Derived>
 class shared_state_base {
+  using cb_type = std::function<void(Derived*)>;
 public:
   ~shared_state_base() {}
   shared_state_base() 
@@ -92,7 +95,7 @@ public:
     return satisfied_ ? status::ready : status::timeout;
   }
 
-  void set_ready() { 
+  void set_ready(std::unique_lock<std::mutex>& lock) { 
     // No lock here, because this should be called 
     // when mutex has been already locked.
     if (satisfied_)
@@ -100,6 +103,13 @@ public:
                          errc_string(errc::promise_already_satisfied));
     satisfied_ = true;
     cond_.notify_all();
+    lock.unlock();
+    cb_(static_cast<Derived*>(this));
+  }
+
+  template<typename F>
+  void set_callback(F&& f) {
+    cb_ = std::forward<F>(f);
   }
 
   bool is_ready() const {
@@ -108,9 +118,9 @@ public:
   }
 
   void set_exception(std::exception_ptr p) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     exception_ptr_ = p;
-    set_ready();
+    set_ready(lock);
   }
 
   bool has_exception() const {
@@ -124,13 +134,13 @@ public:
   }
 
   void abandon() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     if (satisfied_)
       return;
     exception_ptr_ = std::make_exception_ptr(
         future_error(errc::broken_promise, 
                      errc_string(errc::broken_promise)));
-    set_ready();
+    set_ready(lock);
   }
 
 protected:
@@ -138,25 +148,27 @@ protected:
   mutable std::condition_variable cond_;
   bool satisfied_;
   std::exception_ptr exception_ptr_;
+  cb_type cb_ = [](Derived*){};
 };
 
 template<typename T>
-class shared_state : public shared_state_base {
+class shared_state : public shared_state_base<shared_state<T>> {
   using value_type = T;
+  using base_type = shared_state_base<shared_state<T>>;
 
 public:
   template<typename U>
   void set_value(U&& value) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    set_ready();
+    std::unique_lock<std::mutex> lock(base_type::mutex_);
     value_ = std::forward<U>(value);
+    base_type::set_ready(lock);
   }
 
   value_type get_value() const {
-    wait();
-    if (exception_ptr_)
-      std::rethrow_exception(exception_ptr_);
-    return std::move(value_);
+    base_type::wait();
+    if (base_type::exception_ptr_)
+      std::rethrow_exception(base_type::exception_ptr_);
+    return value_;
   }
 
 private:
@@ -271,6 +283,15 @@ private:
   then_impl(F&& f);
 
   template<typename F>
+  typename std::enable_if<
+    !detail::is_future<
+      detail::then_ret_type<T, F>
+    >::value,
+    detail::then_ret_type<T,F>
+  >::type
+  then_impl(F&& f); 
+
+  template<typename F>
   void set_callback(F&& f) {
     check_state(state_);
     state_->set_callback(std::forward<F>(f));
@@ -353,20 +374,53 @@ typename std::enable_if<
   detail::then_ret_type<T,F>
 >::type
 future<T>::then_impl(F&& f) {
-  using R = then_arg_ret_type<T, F>;
+  using R = detail::then_arg_ret_type<T, F>;
   using this_future_type = future<T>;
 
   promise<R> p;
   future<R> ret = p.get_future();
 
-  set_callback([p_ = std::move(p), f = std::forward<F>(f)]
+  set_callback([p_ = std::move(p), f_ = std::forward<F>(f)]
   (detail::shared_state<T>* state) {
     if (state->has_exception())
       p_->set_exception(state->get_exception());
     else {
       try {
         auto inner_f = f_(state->get_value());
-        p_->set_value(f_.get());
+        p_->set_value(inner_f.get());
+      }
+      catch (...) {
+        p_->set_exception(std::current_exception());
+      }
+    }
+  });
+
+  return ret;
+}
+
+// R F(future<T>) specialization
+template<typename T>
+template<typename F>
+typename std::enable_if<
+  !detail::is_future<
+    detail::then_ret_type<T, F>
+  >::value,
+  detail::then_ret_type<T,F>
+>::type
+future<T>::then_impl(F&& f) {
+  using R = detail::then_arg_ret_type<T, F>;
+  using this_future_type = future<T>;
+
+  promise<R> p;
+  future<R> ret = p.get_future();
+
+  set_callback([p_ = std::move(p), f_ = std::forward<F>(f)]
+  (detail::shared_state<T>* state) {
+    if (state->has_exception())
+      p_->set_exception(state->get_exception());
+    else {
+      try {
+        p_->set_value(f_(state->get_value()));
       }
       catch (...) {
         p_->set_exception(std::current_exception());
@@ -380,7 +434,7 @@ future<T>::then_impl(F&& f) {
 template<typename T>
 template<typename F>
 detail::then_ret_type<T, F> future<T>::then(F&& f) {
-  return then_impl<T, F>(f);
+  return then_impl<T, F>(std::forward<F>(f));
 }
 
 } // namespace cf
