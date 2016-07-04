@@ -414,9 +414,9 @@ template<typename T>
 template<typename F>
 typename std::enable_if<
   detail::is_future<
-  detail::then_ret_type<T, F>
+    detail::then_ret_type<T, F>
   >::value,
-  detail::then_ret_type<T, F>
+    detail::then_ret_type<T, F>
 >::type
 future<T>::then_impl(F&& f) {
   using R = typename detail::future_held_type<
