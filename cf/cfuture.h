@@ -348,66 +348,9 @@ private:
 };
 
 template<typename T>
-class promise {
-public:
-  promise()
-    : state_(std::make_shared<detail::shared_state<T>>()) {}
-
-  promise(promise&& other)
-    : state_(std::move(other.state_)) {}
-
-  promise& operator = (promise&& other) {
-    state_ = std::move(other.state_);
-    return *this;
-  }
-
-  ~promise() {
-    if (state_)
-      state_->abandon();
-  }
-
-  void swap(promise& other) noexcept {
-    state_.swap(other.state_);
-  }
-
-  template<typename U>
-  void set_value(U&& value) {
-    check_state(state_);
-    state_->set_value(std::forward<U>(value));
-  }
-
-  future<T> get_future() {
-    check_state(state_);
-    if (state_.use_count() > 1) {
-      throw future_error(errc::future_already_retrieved,
-                         errc_string(errc::future_already_retrieved));
-    }
-    return future<T>(state_);
-  }
-
-  void set_exception(std::exception_ptr p) {
-    check_state(state_);
-    state_->set_exception(p);
-  }
-
-private:
-  detail::shared_state_ptr<T> state_;
-};
-
-template<typename U>
-future<U> make_ready_future(U&& u) {
-  detail::shared_state_ptr<U> state =
-    std::make_shared<detail::shared_state<U>>();
-  state->set_value(std::forward<U>(u));
-  return future<U>(state);
-}
-
-template<typename U>
-future<U> make_exceptional_future(std::exception_ptr p) {
-  detail::shared_state_ptr<U> state =
-    std::make_shared<detail::shared_state<U>>();
-  state->set_exception(p);
-  return future<U>(state);
+template<typename F>
+detail::then_ret_type<T, F> future<T>::then(F&& f) {
+  return then_impl<F>(std::forward<F>(f));
 }
 
 // future<R> F(future<T>) specialization
@@ -477,9 +420,66 @@ future<T>::then_impl(F&& f) {
 }
 
 template<typename T>
-template<typename F>
-detail::then_ret_type<T, F> future<T>::then(F&& f) {
-  return then_impl<F>(std::forward<F>(f));
+class promise {
+public:
+  promise()
+    : state_(std::make_shared<detail::shared_state<T>>()) {}
+
+  promise(promise&& other)
+    : state_(std::move(other.state_)) {}
+
+  promise& operator = (promise&& other) {
+    state_ = std::move(other.state_);
+    return *this;
+  }
+
+  ~promise() {
+    if (state_)
+      state_->abandon();
+  }
+
+  void swap(promise& other) noexcept {
+    state_.swap(other.state_);
+  }
+
+  template<typename U>
+  void set_value(U&& value) {
+    check_state(state_);
+    state_->set_value(std::forward<U>(value));
+  }
+
+  future<T> get_future() {
+    check_state(state_);
+    if (state_.use_count() > 1) {
+      throw future_error(errc::future_already_retrieved,
+                         errc_string(errc::future_already_retrieved));
+    }
+    return future<T>(state_);
+  }
+
+  void set_exception(std::exception_ptr p) {
+    check_state(state_);
+    state_->set_exception(p);
+  }
+
+private:
+  detail::shared_state_ptr<T> state_;
+};
+
+template<typename U>
+future<U> make_ready_future(U&& u) {
+  detail::shared_state_ptr<U> state =
+    std::make_shared<detail::shared_state<U>>();
+  state->set_value(std::forward<U>(u));
+  return future<U>(state);
+}
+
+template<typename U>
+future<U> make_exceptional_future(std::exception_ptr p) {
+  detail::shared_state_ptr<U> state =
+    std::make_shared<detail::shared_state<U>>();
+  state->set_exception(p);
+  return future<U>(state);
 }
 
 } // namespace cf
