@@ -147,7 +147,7 @@ cf::future<double> tfoo(cf::future<int> f) {
 }
 
 TEST_CASE("Then simple test") {
-  SECTION("Single thread") {
+  SECTION("Continuation returns future") {
     auto cont = [](cf::future<double> f) -> cf::future<char> {
       return cf::make_ready_future<char>(f.get());
     };
@@ -157,5 +157,14 @@ TEST_CASE("Then simple test") {
       cont
     );
     REQUIRE(result.get() == (char)5.0);
+  }
+
+  SECTION("Continuation returns non future") {
+    auto result = cf::make_ready_future<int>(42).then([](cf::future<int> f) -> double {
+      return (double)f.get();
+    }).then([](cf::future<double> f) -> char {
+      return (char)f.get();
+    });
+    REQUIRE(result.get() == 42);
   }
 }

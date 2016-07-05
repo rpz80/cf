@@ -105,7 +105,7 @@ namespace detail {
 
 template<typename Derived>
 class shared_state_base {
-  using cb_type = movable_func<void(Derived*)>;
+  using cb_type = movable_func<void()>;
 public:
   ~shared_state_base() {}
   shared_state_base()
@@ -140,7 +140,7 @@ public:
     satisfied_ = true;
     cond_.notify_all();
     lock.unlock();
-    cb_(static_cast<Derived*>(this));
+    cb_();
   }
 
   template<typename F>
@@ -149,7 +149,7 @@ public:
     cb_ = std::forward<F>(f);
     lock.unlock();
     if (satisfied_)
-      cb_(static_cast<Derived*>(this));
+      cb_();
   }
 
   bool is_ready() const {
@@ -188,11 +188,12 @@ protected:
   mutable std::condition_variable cond_;
   std::atomic<bool> satisfied_;
   std::exception_ptr exception_ptr_;
-  cb_type cb_ = [](Derived*) {};
+  cb_type cb_ = []() {};
 };
 
 template<typename T>
-class shared_state : public shared_state_base<shared_state<T>> {
+class shared_state : public shared_state_base<shared_state<T>>,
+                     public std::enable_shared_from_this<shared_state<T>> {
   using value_type = T;
   using base_type = shared_state_base<shared_state<T>>;
 
@@ -414,22 +415,20 @@ template<typename T>
 template<typename F>
 typename std::enable_if<
   detail::is_future<
-  detail::then_ret_type<T, F>
+    detail::then_ret_type<T, F>
   >::value,
-  detail::then_ret_type<T, F>
+    detail::then_ret_type<T, F>
 >::type
 future<T>::then_impl(F&& f) {
   using R = typename detail::future_held_type<
     detail::then_arg_ret_type<T, F>
   >::type;
 
-  using this_future_type = future<T>;
-
   promise<R> p;
   future<R> ret = p.get_future();
 
-  set_callback([p_ = std::move(p), f_ = std::forward<F>(f)]
-  (detail::shared_state<T>* state) mutable {
+  set_callback([p_ = std::move(p), f_ = std::forward<F>(f), 
+               state = this->state_->shared_from_this()] () mutable {
     if (state->has_exception())
       p_.set_exception(state->get_exception());
     else {
@@ -450,9 +449,9 @@ template<typename T>
 template<typename F>
 typename std::enable_if<
   !detail::is_future<
-  detail::then_ret_type<T, F>
+    detail::then_ret_type<T, F>
   >::value,
-  detail::then_ret_type<T, F>
+    detail::then_ret_type<T, F>
 >::type
 future<T>::then_impl(F&& f) {
   using R = detail::then_arg_ret_type<T, F>;
@@ -461,9 +460,8 @@ future<T>::then_impl(F&& f) {
   promise<R> p;
   future<R> ret = p.get_future();
 
-  set_callback([p_ = std::move(p), f_ = std::forward<F>(f)]
-  (detail::shared_state<T>* state) mutable
-  {
+  set_callback([p_ = std::move(p), f_ = std::forward<F>(f),
+               state = this->state_->shared_from_this()] () mutable {
     if (state->has_exception())
       p_.set_exception(state->get_exception());
     else {
