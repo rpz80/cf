@@ -322,7 +322,7 @@ private:
   template<typename F>
   typename std::enable_if<
     detail::is_future<
-    detail::then_ret_type<T, F>
+    detail::then_arg_ret_type<T, F>
     >::value,
     detail::then_ret_type<T, F>
   >::type
@@ -331,7 +331,7 @@ private:
   template<typename F>
   typename std::enable_if<
     !detail::is_future<
-    detail::then_ret_type<T, F>
+    detail::then_arg_ret_type<T, F>
     >::value,
     detail::then_ret_type<T, F>
   >::type
@@ -415,7 +415,7 @@ template<typename T>
 template<typename F>
 typename std::enable_if<
   detail::is_future<
-    detail::then_ret_type<T, F>
+    detail::then_arg_ret_type<T, F>
   >::value,
     detail::then_ret_type<T, F>
 >::type
@@ -449,7 +449,7 @@ template<typename T>
 template<typename F>
 typename std::enable_if<
   !detail::is_future<
-    detail::then_ret_type<T, F>
+    detail::then_arg_ret_type<T, F>
   >::value,
     detail::then_ret_type<T, F>
 >::type
@@ -466,7 +466,7 @@ future<T>::then_impl(F&& f) {
       p_.set_exception(state->get_exception());
     else {
       try {
-        p_.set_value(f_(state->get_value()));
+        p_.set_value(f_(cf::make_ready_future<T>(state->get_value())));
       } catch (...) {
         p_.set_exception(std::current_exception());
       }
