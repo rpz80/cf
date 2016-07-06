@@ -43,7 +43,20 @@ public:
 private:
   std::unique_ptr<base_holder> held_;
 };
+
+class executor_base {
+public:
+  virtual void post(std::function<void()> f) = 0;
+};
+
 }
+
+class sync_executor : public detail::executor_base {
+public:
+  virtual void post(std::function<void()> f) override {
+    f();
+  }
+};
 
 // This is the void type analogue. 
 // Future<void> and promise<void> are explicitly forbidden.
@@ -109,7 +122,8 @@ class shared_state_base {
 public:
   ~shared_state_base() {}
   shared_state_base()
-    : satisfied_(false)
+    : satisfied_(false),
+      default_executor_(new sync_executor)
   {}
 
   void wait() const {
@@ -183,12 +197,21 @@ public:
     set_ready(lock);
   }
 
-protected:
+private:
+  void execute_via_executor() {
+    std::unique_ptr<detail::executor_base>& executor =
+      external_executor_ ? external_executor_ : default_executor_;
+    executor->post([]);
+  }
+
+private:
   mutable std::mutex mutex_;
   mutable std::condition_variable cond_;
   std::atomic<bool> satisfied_;
   std::exception_ptr exception_ptr_;
   cb_type cb_ = []() {};
+  std::unique_ptr<detail::executor_base> default_executor_;
+  std::unique_ptr<detail::executor_base> external_executor_;
 };
 
 template<typename T>
