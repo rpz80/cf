@@ -173,9 +173,9 @@ TEST_CASE("Then simple test") {
     auto result = cf::make_ready_future<int>(42)
       .then([](cf::future<int> f) {
         return (double)f.get();
-      }, &sync_executor).then([](cf::future<double> f) {
+      }, sync_executor).then([](cf::future<double> f) {
         return (char)f.get();
-      }, &sync_executor);
+      }, sync_executor);
     REQUIRE(result.get() == 42);
   }
 }

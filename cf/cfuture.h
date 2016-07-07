@@ -122,8 +122,7 @@ class shared_state_base {
 public:
   ~shared_state_base() {}
   shared_state_base()
-    : satisfied_(false),
-      executor_(nullptr)
+    : satisfied_(false)
   {}
 
   void wait() const {
@@ -306,8 +305,8 @@ public:
   template<typename F>
   detail::then_ret_type<T, F> then(F&& f);
 
-  template<typename F>
-  detail::then_ret_type<T, F> then(F&& f, executor_base* executor);
+  template<typename F, typename Executor>
+  detail::then_ret_type<T, F> then(F&& f, Executor& executor);
 
   bool is_ready() const {
     check_state(state_);
@@ -354,14 +353,14 @@ private:
   >::type
   then_impl(F&& f);
 
-  template<typename F>
+  template<typename F, typename Executor>
   typename std::enable_if<
     !detail::is_future<
       detail::then_arg_ret_type<T, F>
     >::value,
     detail::then_ret_type<T, F>
   >::type
-  then_impl(F&& f, executor_base* executor);
+  then_impl(F&& f, Executor& executor);
 
   template<typename F>
   void set_callback(F&& f) {
@@ -380,8 +379,8 @@ detail::then_ret_type<T, F> future<T>::then(F&& f) {
 }
 
 template<typename T>
-template<typename F>
-detail::then_ret_type<T, F> future<T>::then(F&& f, executor_base* executor) {
+template<typename F, typename Executor>
+detail::then_ret_type<T, F> future<T>::then(F&& f, Executor& executor) {
   return then_impl<F>(std::forward<F>(f), executor);
 }
 
@@ -453,14 +452,14 @@ future<T>::then_impl(F&& f) {
 
 // R F(future<T>) specialization via executor
 template<typename T>
-template<typename F>
+template<typename F, typename Executor>
 typename std::enable_if<
   !detail::is_future<
     detail::then_arg_ret_type<T, F>
   >::value,
   detail::then_ret_type<T, F>
 >::type
-future<T>::then_impl(F&& f, executor_base* executor) {
+future<T>::then_impl(F&& f, Executor& executor) {
   using R = detail::then_arg_ret_type<T, F>;
   using this_future_type = future<T>;
 
@@ -468,11 +467,11 @@ future<T>::then_impl(F&& f, executor_base* executor) {
   future<R> ret = p.get_future();
 
   set_callback([p = std::move(p), f = std::forward<F>(f),
-               state = this->state_->shared_from_this(), executor] () mutable {
+               state = this->state_->shared_from_this(), &executor] () mutable {
     if (state->has_exception())
       p.set_exception(state->get_exception());
     else {
-      executor->post([&p, state, f = std::forward<F>(f)] () mutable {
+      executor.post([&p, state, f = std::forward<F>(f)] () mutable {
         try {
           p.set_value(f(cf::make_ready_future<T>(state->get_value())));
         } catch (...) {
