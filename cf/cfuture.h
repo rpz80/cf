@@ -197,19 +197,12 @@ public:
     set_ready(lock);
   }
 
-  void set_executor(executor_base* executor) {
-    executor_ = executor;
-  }
-
-private:
-
 protected:
   mutable std::mutex mutex_;
   mutable std::condition_variable cond_;
   std::atomic<bool> satisfied_;
   std::exception_ptr exception_ptr_;
   cb_type cb_ = []() {};
-  executor_base* executor_;
 };
 
 template<typename T>
