@@ -167,4 +167,15 @@ TEST_CASE("Then simple test") {
     });
     REQUIRE(result.get() == 42);
   }
+
+  SECTION("Continuation returns non future executor") {
+    cf::sync_executor sync_executor;
+    auto result = cf::make_ready_future<int>(42)
+      .then([](cf::future<int> f) {
+        return (double)f.get();
+      }, &sync_executor).then([](cf::future<double> f) {
+        return (char)f.get();
+      }, &sync_executor);
+    REQUIRE(result.get() == 42);
+  }
 }

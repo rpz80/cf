@@ -44,14 +44,14 @@ private:
   std::unique_ptr<base_holder> held_;
 };
 
+}
+
 class executor_base {
 public:
   virtual void post(std::function<void()> f) = 0;
 };
 
-}
-
-class sync_executor : public detail::executor_base {
+class sync_executor : public executor_base {
 public:
   virtual void post(std::function<void()> f) override {
     f();
@@ -123,7 +123,7 @@ public:
   ~shared_state_base() {}
   shared_state_base()
     : satisfied_(false),
-      default_executor_(new sync_executor)
+      executor_(nullptr)
   {}
 
   void wait() const {
@@ -197,21 +197,19 @@ public:
     set_ready(lock);
   }
 
-private:
-  void execute_via_executor() {
-    std::unique_ptr<detail::executor_base>& executor =
-      external_executor_ ? external_executor_ : default_executor_;
-    executor->post([]);
+  void set_executor(executor_base* executor) {
+    executor_ = executor;
   }
 
 private:
+
+protected:
   mutable std::mutex mutex_;
   mutable std::condition_variable cond_;
   std::atomic<bool> satisfied_;
   std::exception_ptr exception_ptr_;
   cb_type cb_ = []() {};
-  std::unique_ptr<detail::executor_base> default_executor_;
-  std::unique_ptr<detail::executor_base> external_executor_;
+  executor_base* executor_;
 };
 
 template<typename T>
@@ -315,6 +313,9 @@ public:
   template<typename F>
   detail::then_ret_type<T, F> then(F&& f);
 
+  template<typename F>
+  detail::then_ret_type<T, F> then(F&& f, executor_base* executor);
+
   bool is_ready() const {
     check_state(state_);
     return state_->is_ready();
@@ -349,7 +350,7 @@ private:
     >::value,
     detail::then_ret_type<T, F>
   >::type
-    then_impl(F&& f);
+  then_impl(F&& f);
 
   template<typename F>
   typename std::enable_if<
@@ -358,7 +359,16 @@ private:
     >::value,
     detail::then_ret_type<T, F>
   >::type
-    then_impl(F&& f);
+  then_impl(F&& f);
+
+  template<typename F>
+  typename std::enable_if<
+    !detail::is_future<
+      detail::then_arg_ret_type<T, F>
+    >::value,
+    detail::then_ret_type<T, F>
+  >::type
+  then_impl(F&& f, executor_base* executor);
 
   template<typename F>
   void set_callback(F&& f) {
@@ -374,6 +384,12 @@ template<typename T>
 template<typename F>
 detail::then_ret_type<T, F> future<T>::then(F&& f) {
   return then_impl<F>(std::forward<F>(f));
+}
+
+template<typename T>
+template<typename F>
+detail::then_ret_type<T, F> future<T>::then(F&& f, executor_base* executor) {
+  return then_impl<F>(std::forward<F>(f), executor);
 }
 
 // future<R> F(future<T>) specialization
@@ -436,6 +452,40 @@ future<T>::then_impl(F&& f) {
       } catch (...) {
         p_.set_exception(std::current_exception());
       }
+    }
+  });
+
+  return ret;
+}
+
+// R F(future<T>) specialization via executor
+template<typename T>
+template<typename F>
+typename std::enable_if<
+  !detail::is_future<
+    detail::then_arg_ret_type<T, F>
+  >::value,
+  detail::then_ret_type<T, F>
+>::type
+future<T>::then_impl(F&& f, executor_base* executor) {
+  using R = detail::then_arg_ret_type<T, F>;
+  using this_future_type = future<T>;
+
+  promise<R> p;
+  future<R> ret = p.get_future();
+
+  set_callback([p = std::move(p), f = std::forward<F>(f),
+               state = this->state_->shared_from_this(), executor] () mutable {
+    if (state->has_exception())
+      p.set_exception(state->get_exception());
+    else {
+      executor->post([&p, state, f = std::forward<F>(f)] () mutable {
+        try {
+          p.set_value(f(cf::make_ready_future<T>(state->get_value())));
+        } catch (...) {
+          p.set_exception(std::current_exception());
+        }
+      });
     }
   });
 
