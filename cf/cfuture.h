@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <functional>
 #include <atomic>
+#include <queue>
 
 namespace cf {
 
@@ -45,13 +46,37 @@ private:
   std::unique_ptr<base_holder> held_;
 };
 
+using task_type = std::function<void()>;
 }
 
+// Various executors
 class sync_executor {
 public:
-  void post(std::function<void()> f) {
+  void post(const detail::task_type& f) {
     f();
   }
+};
+
+class async_queued_executor {
+public:
+  void post(const detail::task_type& f) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    tasks_.push(f);
+  }
+
+  void stop() {
+
+  }
+
+private:
+  void start() {
+
+  }
+
+private:
+  std::queue<detail::task_type> tasks_;
+  std::mutex mutex_;
+  std::condition_variable cond_;
 };
 
 // This is the void type analogue. 
@@ -354,6 +379,15 @@ private:
 
   template<typename F, typename Executor>
   typename std::enable_if<
+    detail::is_future<
+      detail::then_arg_ret_type<T, F>
+    >::value,
+    detail::then_ret_type<T, F>
+  >::type
+  then_impl(F&& f, Executor& executor);
+
+  template<typename F, typename Executor>
+  typename std::enable_if<
     !detail::is_future<
       detail::then_arg_ret_type<T, F>
     >::value,
@@ -449,6 +483,42 @@ future<T>::then_impl(F&& f) {
   return ret;
 }
 
+// future<R> F(future<T>) specialization via executor
+template<typename T>
+template<typename F, typename Executor>
+typename std::enable_if<
+  detail::is_future<
+    detail::then_arg_ret_type<T, F>
+  >::value,
+  detail::then_ret_type<T, F>
+>::type
+future<T>::then_impl(F&& f, Executor& executor) {
+  using R = typename detail::future_held_type<
+    detail::then_arg_ret_type<T, F>
+  >::type;
+
+  promise<R> p;
+  future<R> ret = p.get_future();
+
+  set_callback([p = std::move(p), f = std::forward<F>(f),
+               state = this->state_->shared_from_this(), &executor] () mutable {
+    if (state->has_exception())
+      p.set_exception(state->get_exception());
+    else {
+      executor.post([&p, state, f = std::forward<F>(f)] () mutable {
+        try {
+          auto inner_f = f(cf::make_ready_future<T>(state->get_value()));
+          p.set_value(inner_f.get());
+        } catch (...) {
+          p.set_exception(std::current_exception());
+        }
+      });
+    }
+  });
+
+  return ret;
+}
+
 // R F(future<T>) specialization via executor
 template<typename T>
 template<typename F, typename Executor>
@@ -460,7 +530,6 @@ typename std::enable_if<
 >::type
 future<T>::then_impl(F&& f, Executor& executor) {
   using R = detail::then_arg_ret_type<T, F>;
-  using this_future_type = future<T>;
 
   promise<R> p;
   future<R> ret = p.get_future();
