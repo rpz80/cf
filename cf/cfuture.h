@@ -1,4 +1,5 @@
 #include <mutex>
+#include <thread>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -46,14 +47,9 @@ private:
 
 }
 
-class executor_base {
+class sync_executor {
 public:
-  virtual void post(std::function<void()> f) = 0;
-};
-
-class sync_executor : public executor_base {
-public:
-  virtual void post(std::function<void()> f) override {
+  void post(std::function<void()> f) {
     f();
   }
 };
@@ -244,6 +240,9 @@ void check_state(const shared_state_ptr<T>& state) {
 template<typename T, typename F>
 using then_arg_ret_type = std::result_of_t<std::decay_t<F>(future<T>)>;
 
+template<typename F, typename... Args>
+using callable_ret_type = std::result_of_t<std::decay_t<F>(Args...)>;
+
 template<typename T>
 struct is_future {
   const static bool value = false;
@@ -401,16 +400,16 @@ future<T>::then_impl(F&& f) {
   promise<R> p;
   future<R> ret = p.get_future();
 
-  set_callback([p_ = std::move(p), f_ = std::forward<F>(f), 
+  set_callback([p = std::move(p), f = std::forward<F>(f), 
                state = this->state_->shared_from_this()] () mutable {
     if (state->has_exception())
-      p_.set_exception(state->get_exception());
+      p.set_exception(state->get_exception());
     else {
       try {
-        auto inner_f = f_(cf::make_ready_future<T>(state->get_value()));
-        p_.set_value(inner_f.get());
+        auto inner_f = f(cf::make_ready_future<T>(state->get_value()));
+        p.set_value(inner_f.get());
       } catch (...) {
-        p_.set_exception(std::current_exception());
+        p.set_exception(std::current_exception());
       }
     }
   });
@@ -434,15 +433,15 @@ future<T>::then_impl(F&& f) {
   promise<R> p;
   future<R> ret = p.get_future();
 
-  set_callback([p_ = std::move(p), f_ = std::forward<F>(f),
+  set_callback([p = std::move(p), f = std::forward<F>(f),
                state = this->state_->shared_from_this()] () mutable {
     if (state->has_exception())
-      p_.set_exception(state->get_exception());
+      p.set_exception(state->get_exception());
     else {
       try {
-        p_.set_value(f_(cf::make_ready_future<T>(state->get_value())));
+        p.set_value(f(cf::make_ready_future<T>(state->get_value())));
       } catch (...) {
-        p_.set_exception(std::current_exception());
+        p.set_exception(std::current_exception());
       }
     }
   });
@@ -545,6 +544,17 @@ future<U> make_exceptional_future(std::exception_ptr p) {
     std::make_shared<detail::shared_state<U>>();
   state->set_exception(p);
   return future<U>(state);
+}
+
+template<typename F, typename... Args>
+future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
+  using future_inner_type = detail::callable_ret_type<F, Args...>;
+  promise<future_inner_type> p;
+  auto result = p.get_future();
+  std::thread([p = std::move(p), f = std::forward<F>(f), args...] () mutable {
+    p.set_value(std::forward<F>(f)(args...));
+  }).detach();
+  return result;
 }
 
 } // namespace cf

@@ -179,3 +179,21 @@ TEST_CASE("Then simple test") {
     REQUIRE(result.get() == 42);
   }
 }
+
+TEST_CASE("Async") {
+  SECTION("async simple with args") {
+    auto f = cf::async([](int i) { 
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      return i; 
+    }, 42);
+    REQUIRE(f.get() == 42);
+  }
+
+  SECTION("async simple without args") {
+    auto f = cf::async([]() { 
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      return 42; 
+    });
+    REQUIRE(f.get() == 42);
+  }
+}
