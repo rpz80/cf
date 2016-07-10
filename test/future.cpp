@@ -73,7 +73,7 @@ TEST_CASE("Future", "[future][promise][basic][single-thread]") {
 
           REQUIRE(!future.valid());
           REQUIRE(future1.valid());
-          REQUIRE(future1.get() == 56);
+          REQUIRE_THROWS(future1.get());
         }
       }
 
@@ -228,10 +228,7 @@ TEST_CASE("When all") {
         return (int)i;
       }));
     }
-    //auto when_all_future = cf::when_all(vec.begin(), vec.end());
-    //when_all_future.wait();
-    //when_all_future.get();
-    auto when_all_result = std::move(cf::when_all(vec.begin(), vec.end()).get());
+    auto when_all_result = cf::when_all(vec.begin(), vec.end()).get();
     REQUIRE(when_all_result.size() == size);
     for (size_t i = 0; i < size; ++i) {
       REQUIRE(when_all_result[i].get() == i);
