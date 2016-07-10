@@ -699,7 +699,7 @@ auto when_all(InputIt first, InputIt last)
       ++shared_context->ready_futures;
       if (shared_context->ready_futures == shared_context->total_futures)
         shared_context->p.set_value(std::move(shared_context->result));
-      return std::iterator_traits<InputIt>::value_type(std::move(f));
+      return std::move(f);
     }));
   }
   return result_future;
