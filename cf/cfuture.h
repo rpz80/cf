@@ -705,4 +705,10 @@ auto when_all(InputIt first, InputIt last)
   return result_future;
 }
 
+template<typename... Futures>
+auto when_all(Futures&&... futures)
+-> future<std::tuple<std::decay_t<Futures>...>> {
+
+}
+
 } // namespace cf
