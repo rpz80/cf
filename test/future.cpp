@@ -197,3 +197,44 @@ TEST_CASE("Async") {
     REQUIRE(f.get() == 42);
   }
 }
+
+TEST_CASE("Executors") {
+  SECTION("Async queued executor") {
+    cf::async_queued_executor executor;
+    int counter = 0;
+    auto result = cf::async([&counter] {
+      ++counter;
+      return 42;
+    }).then([&counter](cf::future<int> f) {
+      ++counter;
+      f.get();
+      return std::string("Hello");
+    }, executor).then([&counter](cf::future<std::string> f) {
+      ++counter;
+      return f.get() + " world!";
+    }, executor);
+    REQUIRE(result.get() == "Hello world!");
+    REQUIRE(counter == 3);
+  }
+}
+
+TEST_CASE("When all") {
+  SECTION("Simple") {
+    const size_t size = 5;
+    std::vector<cf::future<int>> vec;
+    for (size_t i = 0; i < size; ++i) {
+      vec.push_back(cf::async([i] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(i * 30));
+        return (int)i;
+      }));
+    }
+    //auto when_all_future = cf::when_all(vec.begin(), vec.end());
+    //when_all_future.wait();
+    //when_all_future.get();
+    auto when_all_result = std::move(cf::when_all(vec.begin(), vec.end()).get());
+    REQUIRE(when_all_result.size() == size);
+    for (size_t i = 0; i < size; ++i) {
+      REQUIRE(when_all_result[i].get() == i);
+    }
+  }
+}

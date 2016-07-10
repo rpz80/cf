@@ -8,6 +8,8 @@
 #include <functional>
 #include <atomic>
 #include <queue>
+#include <vector>
+#include <iterator>
 
 namespace cf {
 
@@ -21,6 +23,7 @@ class movable_func<R(Args...)> {
 
   struct base_holder {
     virtual R operator() (Args... args) = 0;
+    virtual ~base_holder() {}
   };
 
   template<typename F>
@@ -37,6 +40,10 @@ public:
   template<typename F>
   movable_func(F f) : held_(new holder<F>(std::move(f))) {}
   movable_func() : held_(nullptr) {}
+  movable_func(movable_func<R(Args...)>&& other) = default;
+  movable_func& operator = (movable_func<R(Args...)>&& other) = default;
+  movable_func(const movable_func<R(Args...)>& other) = delete;
+  movable_func& operator = (const movable_func<R(Args...)>& other) = delete;
 
   R operator() (Args... args) const {
     return held_->operator()(args...);
@@ -59,24 +66,55 @@ public:
 
 class async_queued_executor {
 public:
+  async_queued_executor() : need_stop_(false) {
+    start();
+  }
+
+  ~async_queued_executor() {
+    stop();
+  }
+
   void post(const detail::task_type& f) {
     std::lock_guard<std::mutex> lock(mutex_);
     tasks_.push(f);
+    cond_.notify_all();
   }
 
   void stop() {
-
+    {
+      std::lock_guard<std::mutex> lock_(mutex_);
+      need_stop_ = true;
+    }
+    cond_.notify_all();
+    if (thread_.joinable())
+      thread_.join();
   }
 
 private:
   void start() {
-
+    thread_ = std::thread([this] {
+      while (true) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cond_.wait(lock, [this] { return need_stop_ || !tasks_.empty(); });
+        if (need_stop_)
+          break;
+        while (!tasks_.empty()) {
+          auto f = tasks_.front();
+          tasks_.pop();
+          lock.unlock();
+          f();
+          lock.lock();
+        }
+      }
+    });
   }
 
 private:
   std::queue<detail::task_type> tasks_;
   std::mutex mutex_;
   std::condition_variable cond_;
+  std::thread thread_;
+  bool need_stop_;
 };
 
 // This is the void type analogue. 
@@ -239,11 +277,11 @@ public:
     base_type::set_ready(lock);
   }
 
-  value_type get_value() const {
+  value_type get_value() {
     base_type::wait();
     if (base_type::exception_ptr_)
       std::rethrow_exception(base_type::exception_ptr_);
-    return value_;
+    return std::move(value_);
   }
 
 private:
@@ -308,6 +346,9 @@ class future {
 
 public:
   future() = default;
+
+  future(const future<T>& other) = delete;
+  future<T>& operator = (const future<T>& other) = delete;
 
   future(future<T>&& other)
     : state_(std::move(other.state_)) {}
@@ -404,6 +445,9 @@ private:
 private:
   detail::shared_state_ptr<T> state_;
 };
+
+template<>
+class future<void>;
 
 template<typename T>
 template<typename F>
@@ -599,6 +643,9 @@ private:
   detail::shared_state_ptr<T> state_;
 };
 
+template<>
+class promise<void>;
+
 template<typename U>
 future<U> make_ready_future(U&& u) {
   detail::shared_state_ptr<U> state =
@@ -624,6 +671,33 @@ future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
     p.set_value(std::forward<F>(f)(args...));
   }).detach();
   return result;
+}
+
+template<typename InputIt>
+auto when_all(InputIt first, InputIt last)
+-> future<std::vector<typename std::iterator_traits<InputIt>::value_type>> {
+  using result_inner_type = 
+    std::vector<typename std::iterator_traits<InputIt>::value_type>;
+  promise<result_inner_type> p;
+  auto result_future = p.get_future();
+  struct context {
+    size_t total_futures = 0;
+    std::atomic<size_t> ready_futures = 0;
+    result_inner_type result;
+  };
+  auto shared_context = std::make_shared<context>();
+  shared_context->total_futures = std::distance(first, last);
+  for (; first != last; ++first) {
+    shared_context->result.push_back(first->then(
+    [shared_context, p = std::move(p)] 
+    (std::iterator_traits<InputIt>::value_type f) mutable {
+      ++shared_context->ready_futures;
+      if (shared_context->ready_futures == shared_context->total_futures)
+        p.set_value(std::move(shared_context->result));
+      return std::iterator_traits<InputIt>::value_type(std::move(f));
+    }));
+  }
+  return result_future;
 }
 
 } // namespace cf
