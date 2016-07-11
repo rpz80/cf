@@ -219,7 +219,7 @@ TEST_CASE("Executors") {
 }
 
 TEST_CASE("When all") {
-  SECTION("Simple") {
+  SECTION("Simple vector") {
     const size_t size = 5;
     std::vector<cf::future<int>> vec;
     for (size_t i = 0; i < size; ++i) {
@@ -233,5 +233,15 @@ TEST_CASE("When all") {
     for (size_t i = 0; i < size; ++i) {
       REQUIRE(when_all_result[i].get() == i);
     }
+  }
+
+  SECTION("Simple tuple") {
+    std::tuple<cf::future<int>, cf::future<cf::unit>> t;
+    std::get<0>(t) = cf::async([]{ return 1; });
+    std::get<1>(t) = cf::async([]{ return cf::unit(); });
+    cf::when_all(t).wait();
+    // auto when_all_result = cf::when_all(t).get();
+    // REQUIRE(std::get<0>(when_all_result).get() == 1);
+    // REQUIRE(std::get<1>(when_all_result).get() == cf::unit());
   }
 }

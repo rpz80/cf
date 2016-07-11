@@ -10,6 +10,7 @@
 #include <queue>
 #include <vector>
 #include <iterator>
+#include <tuple>
 
 namespace cf {
 
@@ -708,7 +709,21 @@ auto when_all(InputIt first, InputIt last)
 template<typename... Futures>
 auto when_all(Futures&&... futures)
 -> future<std::tuple<std::decay_t<Futures>...>> {
-
+  using result_inner_type = std::tuple<std::decay_t<Futures>...>;
+  struct context : public std::enable_shared_from_this<context> {
+    const size_t total_futures = sizeof...(Futures);
+    std::atomic<size_t> ready_futures = 0;
+    result_inner_type result = 
+      std::make_tuple<Futures...>(std::forward<Futures...>(futures).then(
+      [this, shared_context = this->shared_form_this()] {
+        ++shared_context->ready_futures;
+        if (shared_context->ready_futures == shared_context->total_futures)
+          shared_context->p.set_value(std::move(shared_context->result));
+      })...);
+    promise<result_inner_type> p;
+  };
+  auto result_future = std::make_shared<context>()->p.get_future();
+  return result_future;
 }
 
 } // namespace cf
