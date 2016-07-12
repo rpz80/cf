@@ -236,12 +236,10 @@ TEST_CASE("When all") {
   }
 
   SECTION("Simple tuple") {
-    std::tuple<cf::future<int>, cf::future<cf::unit>> t;
-    std::get<0>(t) = cf::async([]{ return 1; });
-    std::get<1>(t) = cf::async([]{ return cf::unit(); });
-    cf::when_all(t).wait();
-    // auto when_all_result = cf::when_all(t).get();
-    // REQUIRE(std::get<0>(when_all_result).get() == 1);
-    // REQUIRE(std::get<1>(when_all_result).get() == cf::unit());
+    auto when_all_result = cf::when_all(
+      cf::async([]{ return 1; }), 
+      cf::async([]{ return cf::unit(); })).get();
+    REQUIRE(std::get<0>(when_all_result).get() == 1);
+    REQUIRE(std::get<1>(when_all_result).get() == cf::unit());
   }
 }

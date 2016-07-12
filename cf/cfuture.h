@@ -123,6 +123,8 @@ private:
 // If you need future just to signal that the async operation is ready,
 // use future<unit> and discard the result.
 struct unit {};
+inline bool operator == (unit lhs, unit rhs) { return true; }
+inline bool operator != (unit lhs, unit rhs) { return false; }
 
 enum class status {
   ready,
@@ -706,24 +708,34 @@ auto when_all(InputIt first, InputIt last)
   return result_future;
 }
 
+namespace detail {
+template<typename Context, typename Future>
+Future when_inner_helper(Context context, Future f) {
+  return f.then([context](Future f) {
+    ++context->ready_futures;
+    if (context->ready_futures == context->total_futures)
+      context->p.set_value(std::move(context->result));
+    return std::move(f);
+  });
+}
+}
+
 template<typename... Futures>
 auto when_all(Futures&&... futures)
 -> future<std::tuple<std::decay_t<Futures>...>> {
   using result_inner_type = std::tuple<std::decay_t<Futures>...>;
-  struct context : public std::enable_shared_from_this<context> {
-    const size_t total_futures = sizeof...(Futures);
+  struct context {
+    size_t total_futures;
     std::atomic<size_t> ready_futures = 0;
-    result_inner_type result = 
-      std::make_tuple<Futures...>(std::forward<Futures...>(futures).then(
-      [this, shared_context = this->shared_form_this()] {
-        ++shared_context->ready_futures;
-        if (shared_context->ready_futures == shared_context->total_futures)
-          shared_context->p.set_value(std::move(shared_context->result));
-      })...);
+    result_inner_type result;
     promise<result_inner_type> p;
   };
-  auto result_future = std::make_shared<context>()->p.get_future();
-  return result_future;
+  auto shared_context = std::make_shared<context>();
+  shared_context->total_futures = sizeof...(futures);
+  shared_context->result = std::make_tuple(
+      detail::when_inner_helper(shared_context, 
+                                std::forward<Futures>(futures))...);
+  return shared_context->p.get_future();
 }
 
 } // namespace cf
