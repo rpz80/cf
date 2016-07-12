@@ -222,12 +222,22 @@ TEST_CASE("When all") {
   SECTION("Simple vector") {
     const size_t size = 5;
     std::vector<cf::future<int>> vec;
-    for (size_t i = 0; i < size; ++i) {
-      vec.push_back(cf::async([i] {
-        //std::this_thread::sleep_for(std::chrono::milliseconds(i * 30));
-        return (int)i;
-      }));
+
+    SECTION("Async") {
+      for (size_t i = 0; i < size; ++i) {
+        vec.push_back(cf::async([i] {
+          std::this_thread::sleep_for(std::chrono::milliseconds(i * 30));
+          return (int)i;
+        }));
+      }
     }
+
+    SECTION("Ready futures") {
+      for (size_t i = 0; i < size; ++i) {
+        vec.push_back(cf::make_ready_future((int)i));
+      }
+    }
+
     auto when_all_result = cf::when_all(vec.begin(), vec.end()).get();
     REQUIRE(when_all_result.size() == size);
     for (size_t i = 0; i < size; ++i) {

@@ -688,22 +688,25 @@ auto when_all(InputIt first, InputIt last)
     std::vector<typename std::iterator_traits<InputIt>::value_type>;
   struct context {
     size_t total_futures = 0;
-    std::atomic<size_t> ready_futures = 0;
     result_inner_type result;
+    std::mutex mutex;
     promise<result_inner_type> p;
   };
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
   for (; first != last; ++first) {
-    shared_context->result.push_back(first->then(
+    first->then(
     [shared_context] 
     (std::iterator_traits<InputIt>::value_type f) mutable {
-      ++shared_context->ready_futures;
-      if (shared_context->ready_futures == shared_context->total_futures)
-        shared_context->p.set_value(std::move(shared_context->result));
-      return std::move(f);
-    }));
+      {
+        std::lock_guard<std::mutex> lock(shared_context->mutex);
+        shared_context->result.push_back(std::move(f));
+        if (shared_context->result.size() == shared_context->total_futures)
+          shared_context->p.set_value(std::move(shared_context->result));
+      }
+      return unit();
+    });
   }
   return result_future;
 }
