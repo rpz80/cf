@@ -482,10 +482,8 @@ future<T>::then_impl(F&& f) {
   using R = typename detail::future_held_type<
     detail::then_arg_ret_type<T, F>
   >::type;
-
   promise<R> p;
   future<R> ret = p.get_future();
-
   set_callback([p = std::move(p), f = std::forward<F>(f), 
                state = this->state_->shared_from_this()] () mutable {
     if (state->has_exception())
@@ -515,10 +513,8 @@ typename std::enable_if<
 future<T>::then_impl(F&& f) {
   using R = detail::then_arg_ret_type<T, F>;
   using this_future_type = future<T>;
-
   promise<R> p;
   future<R> ret = p.get_future();
-
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = this->state_->shared_from_this()] () mutable {
     if (state->has_exception())
@@ -548,10 +544,8 @@ future<T>::then_impl(F&& f, Executor& executor) {
   using R = typename detail::future_held_type<
     detail::then_arg_ret_type<T, F>
   >::type;
-
   promise<R> p;
   future<R> ret = p.get_future();
-
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = this->state_->shared_from_this(), &executor] () mutable {
     if (state->has_exception())
@@ -582,10 +576,8 @@ typename std::enable_if<
 >::type
 future<T>::then_impl(F&& f, Executor& executor) {
   using R = detail::then_arg_ret_type<T, F>;
-
   promise<R> p;
   future<R> ret = p.get_future();
-
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = this->state_->shared_from_this(), &executor] () mutable {
     if (state->has_exception())
