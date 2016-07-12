@@ -224,7 +224,7 @@ TEST_CASE("When all") {
     std::vector<cf::future<int>> vec;
     for (size_t i = 0; i < size; ++i) {
       vec.push_back(cf::async([i] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(i * 30));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(i * 30));
         return (int)i;
       }));
     }
