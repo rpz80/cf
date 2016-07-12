@@ -723,8 +723,7 @@ void apply_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
 }
 
 template<size_t I, typename Context>
-void apply_helper(const Context& context) {
-}
+void apply_helper(const Context& context) {}
 }
 
 template<typename... Futures>
