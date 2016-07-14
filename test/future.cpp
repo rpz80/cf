@@ -15,7 +15,7 @@ struct test_struct {
   cf::unit bar1(cf::future<baz>) {return cf::unit(); };
 };
 
-TEST_CASE("Types", "[future]") {
+TEST_CASE("Types") {
   SECTION("Callable return type") {
     test_struct ts;
     auto ts_bar1 = std::bind(&test_struct::bar1, &ts, std::placeholders::_1);
@@ -42,7 +42,7 @@ TEST_CASE("Types", "[future]") {
   }
 }
 
-TEST_CASE("Future", "[future][promise][basic][single-thread]") {
+TEST_CASE("Future") {
   cf::future<int> future;
   cf::promise<int> promise;
 
@@ -126,7 +126,7 @@ TEST_CASE("Future", "[future][promise][basic][single-thread]") {
   }
 }
 
-TEST_CASE("Make future functions", "[future]") {
+TEST_CASE("Make future functions") {
   SECTION("Make ready") {
     cf::future<int> f = cf::make_ready_future(42);
     REQUIRE(f.is_ready());
