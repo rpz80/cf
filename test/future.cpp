@@ -253,3 +253,32 @@ TEST_CASE("When all") {
     REQUIRE(std::get<1>(when_all_result).get() == cf::unit());
   }
 }
+
+TEST_CASE("When any") {
+ SECTION("Simple vector") {
+    const size_t size = 5;
+    std::vector<cf::future<int>> vec;
+
+    SECTION("Async") {
+      for (size_t i = 0; i < size; ++i) {
+        vec.push_back(cf::async([i, size] {
+          std::this_thread::sleep_for(
+            std::chrono::milliseconds((size - i) * 30));
+          return (int)i;
+        }));
+      }
+      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
+      REQUIRE(when_any_result.sequence.size() == size);
+      REQUIRE(when_any_result.index == 4);
+    }
+
+    SECTION("Ready futures") {
+      for (size_t i = 0; i < size; ++i) {
+        vec.push_back(cf::make_ready_future((int)i));
+      }
+      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
+      REQUIRE(when_any_result.sequence.size() == size);
+      REQUIRE(when_any_result.index == 0);
+    }
+  }
+}

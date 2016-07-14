@@ -743,4 +743,51 @@ auto when_all(Futures&&... futures)
   return shared_context->p.get_future();
 }
 
+template<typename Sequence>
+struct when_any_result {
+  size_t index;
+  Sequence sequence;
+};
+
+template<typename InputIt>
+auto when_any(InputIt first, InputIt last)
+->future<
+    when_any_result<
+      std::vector<
+        typename std::iterator_traits<InputIt>::value_type>>> {
+  using result_inner_type =
+    std::vector<typename std::iterator_traits<InputIt>::value_type>;
+  using future_inner_type = when_any_result<result_inner_type>;
+  struct context {
+    future_inner_type result;
+    size_t total_futures;
+    bool ready = false;
+    std::mutex mutex;
+    promise<future_inner_type> p;
+  };
+  auto shared_context = std::make_shared<context>();
+  auto result_future = shared_context->p.get_future();
+  shared_context->total_futures = std::distance(first, last);
+  size_t index = 0;
+  for (; first != last; ++first, ++index) {
+    first->then(
+      [shared_context, index]
+    (std::iterator_traits<InputIt>::value_type f) mutable {
+      {
+        std::lock_guard<std::mutex> lock(shared_context->mutex);
+        shared_context->result.sequence.push_back(std::move(f));
+        if (!shared_context->ready) {
+          shared_context->result.index = index;
+          shared_context->ready = true;
+        }
+        if (shared_context->total_futures ==
+            shared_context->result.sequence.size() && shared_context->ready) {
+          shared_context->p.set_value(std::move(shared_context->result));
+        }
+      }
+      return unit();
+    });
+  }
+  return result_future;
+}
 } // namespace cf
