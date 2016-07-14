@@ -796,4 +796,44 @@ auto when_any(InputIt first, InputIt last)
   }
   return result_future;
 }
+
+namespace detail {
+template<size_t I, typename Context, typename Future>
+void when_any_inner_helper(Context context, Future&& f) {
+  f.then([context](Future f) {
+    std::lock_guard<std::mutex> lock(context->mutex);
+    ++context->ready_futures;
+    std::get<I>(context->result) = std::move(f);
+    if (context->ready_futures == context->total_futures)
+      context->p.set_value(std::move(context->result));
+    return unit();
+  });
+}
+
+template<size_t I, typename Context, typename FirstFuture, typename... Futures>
+void apply_when_any_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
+  when_inner_helper<I>(context, std::forward<FirstFuture>(f));
+  apply_helper<I+1>(context, std::forward<Futures>(fs)...);
+}
+
+template<size_t I, typename Context>
+void apply_when_any_helper(const Context& context) {}
+}
+
+template<typename... Futures>
+auto when_any(Futures&&... futures)
+-> future<std::tuple<std::decay_t<Futures>...>> {
+  using result_inner_type = std::tuple<std::decay_t<Futures>...>;
+  struct context {
+    size_t total_futures;
+    size_t ready_futures = 0;
+    result_inner_type result;
+    promise<result_inner_type> p;
+    std::mutex mutex;
+  };
+  auto shared_context = std::make_shared<context>();
+  shared_context->total_futures = sizeof...(futures);
+  detail::apply_helper<0>(shared_context, std::forward<Futures>(futures)...);
+  return shared_context->p.get_future();
+}
 } // namespace cf
