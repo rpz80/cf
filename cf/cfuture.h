@@ -760,33 +760,39 @@ auto when_any(InputIt first, InputIt last)
   using future_inner_type = when_any_result<result_inner_type>;
   struct context {
     future_inner_type result;
-    size_t total_futures;
-    bool ready = false;
-    std::mutex mutex;
     promise<future_inner_type> p;
+    size_t total_futures = 0;
+    bool ready = false;
+    bool result_set = false;
+    std::mutex mutex;
   };
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
   size_t index = 0;
   for (; first != last; ++first, ++index) {
-    first->then(
-      [shared_context, index]
+    shared_context->result.sequence.push_back(first->then(
+    [shared_context, index]
     (std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
-        shared_context->result.sequence.push_back(std::move(f));
         if (!shared_context->ready) {
           shared_context->result.index = index;
           shared_context->ready = true;
         }
-        if (shared_context->total_futures ==
-            shared_context->result.sequence.size() && shared_context->ready) {
+        auto result_size = shared_context->result.sequence.size();
+        if (shared_context->total_futures == result_size) {
           shared_context->p.set_value(std::move(shared_context->result));
+          shared_context->result_set = true;
         }
       }
-      return unit();
-    });
+      return std::move(f);
+    }));
+  }
+  {
+    std::lock_guard<std::mutex> lock(shared_context->mutex);
+    if (!shared_context->result_set && shared_context->ready)
+      shared_context->p.set_value(std::move(shared_context->result));
   }
   return result_future;
 }
