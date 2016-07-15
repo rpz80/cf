@@ -281,4 +281,18 @@ TEST_CASE("When any") {
       REQUIRE(when_any_result.index == 0);
     }
   }
+
+  SECTION("Simple tuple") {
+    auto when_any_result = cf::when_any(
+      cf::async([] { 
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        return 1; 
+      }), 
+      cf::async([] { 
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return cf::unit(); 
+      })).get();
+    REQUIRE(when_any_result.index == 1);
+    REQUIRE(std::get<1>(when_any_result.sequence).get() == cf::unit());
+  }
 }

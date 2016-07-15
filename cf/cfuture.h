@@ -772,7 +772,7 @@ auto when_any(InputIt first, InputIt last)
     result_inner_type temp_result;
     promise<future_inner_type> p;
     size_t total_futures = 0;
-    size_t ready_futures = 0;
+    size_t futures_in_result = 0;
     bool ready = false;
     bool result_set = false;
     std::mutex mutex;
@@ -794,15 +794,16 @@ auto when_any(InputIt first, InputIt last)
           shared_context->result.index = index;
           shared_context->ready = true;
         }
-        ++shared_context->ready_futures;
         shared_context->result.sequence[index] = std::move(f);
-        if (shared_context->total_futures == shared_context->ready_futures) {
+        if (shared_context->total_futures == shared_context->futures_in_result) {
           shared_context->p.set_value(std::move(shared_context->result));
           shared_context->result_set = true;
         }
       }
       return unit();
     });
+    std::lock_guard<std::mutex> lock(shared_context->mutex);
+    ++shared_context->futures_in_result;
   }
   {
     std::lock_guard<std::mutex> lock(shared_context->mutex);
@@ -815,26 +816,29 @@ auto when_any(InputIt first, InputIt last)
 namespace detail {
 template<size_t I, typename Context, typename Future>
 void when_any_inner_helper(Context context, Future&& f) {
-  std::get<I>(context->result.sequence) = 
-    f.then([context](Future f) {
-      std::lock_guard<std::mutex> lock(context->mutex);
-      ++context->ready_futures;
-      if (!context->ready) {
-        context->ready = true;
-        context->result.index = I;
-      }
-      if (context->ready_futures == context->total_futures) {
-        context->p.set_value(std::move(context->result));
-        context->result_set = true;
-      }
-      return std::move(f);
-    });
+  std::get<I>(context->temp_result) = std::move(f);
+  std::get<I>(context->temp_result).then(
+    [context](Future f) {
+    std::lock_guard<std::mutex> lock(context->mutex);
+    if (!context->ready) {
+      context->ready = true;
+      context->result.index = I;
+    }
+    std::get<I>(context->result.sequence) = std::move(f);
+    if (context->futures_in_result == context->total_futures) {
+      context->p.set_value(std::move(context->result));
+      context->result_set = true;
+    }
+    return std::move(f);
+  });
+  std::lock_guard<std::mutex> lock(context->mutex);
+  ++context->futures_in_result;
 }
 
 template<size_t I, typename Context, typename FirstFuture, typename... Futures>
 void apply_when_any_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
-  when_inner_helper<I>(context, std::forward<FirstFuture>(f));
-  apply_helper<I+1>(context, std::forward<Futures>(fs)...);
+  when_any_inner_helper<I>(context, std::forward<FirstFuture>(f));
+  apply_when_any_helper<I+1>(context, std::forward<Futures>(fs)...);
 }
 
 template<size_t I, typename Context>
@@ -848,16 +852,17 @@ auto when_any(Futures&&... futures)
   using future_inner_type = when_any_result<result_inner_type>;
   struct context {
     size_t total_futures;
-    size_t ready_futures = 0;
+    size_t futures_in_result = 0;
     bool result_set = false;
     bool ready = false;
     future_inner_type result;
+    result_inner_type temp_result;
     promise<future_inner_type> p;
     std::mutex mutex;
   };
   auto shared_context = std::make_shared<context>();
   shared_context->total_futures = sizeof...(futures);
-  detail::apply_helper<0>(shared_context, std::forward<Futures>(futures)...);
+  detail::apply_when_any_helper<0>(shared_context, std::forward<Futures>(futures)...);
   {
     std::lock_guard<std::mutex> lock(shared_context->mutex);
     if (!shared_context->result_set && shared_context->ready)
