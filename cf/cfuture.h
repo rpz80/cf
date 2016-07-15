@@ -680,21 +680,28 @@ auto when_all(InputIt first, InputIt last)
     std::vector<typename std::iterator_traits<InputIt>::value_type>;
   struct context {
     size_t total_futures = 0;
+	size_t ready_futures = 0;
     result_inner_type result;
+    result_inner_type temp_result;
     std::mutex mutex;
     promise<result_inner_type> p;
   };
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
-  for (; first != last; ++first) {
-    first->then(
-    [shared_context] 
+  shared_context->result.resize(shared_context->total_futures);
+  shared_context->temp_result.reserve(shared_context->total_futures);
+  size_t index = 0;
+  for (; first != last; ++first, ++index) {
+    shared_context->temp_result.push_back(std::move(*first));
+    shared_context->temp_result[index].then(
+    [shared_context, index] 
     (std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
-        shared_context->result.push_back(std::move(f));
-        if (shared_context->result.size() == shared_context->total_futures)
+        shared_context->result[index] = std::move(f);
+        ++shared_context->ready_futures;
+        if (shared_context->ready_futures == shared_context->total_futures)
           shared_context->p.set_value(std::move(shared_context->result));
       }
       return unit();
@@ -706,7 +713,8 @@ auto when_all(InputIt first, InputIt last)
 namespace detail {
 template<size_t I, typename Context, typename Future>
 void when_inner_helper(Context context, Future&& f) {
-  f.then([context](Future f) {
+  std::get<I>(context->temp_result) = std::move(f);
+  std::get<I>(context->temp_result).then([context](Future f) {
     std::lock_guard<std::mutex> lock(context->mutex);
     ++context->ready_futures;
     std::get<I>(context->result) = std::move(f);
@@ -734,6 +742,7 @@ auto when_all(Futures&&... futures)
     size_t total_futures;
     size_t ready_futures = 0;
     result_inner_type result;
+    result_inner_type temp_result;
     promise<result_inner_type> p;
     std::mutex mutex;
   };
@@ -760,8 +769,10 @@ auto when_any(InputIt first, InputIt last)
   using future_inner_type = when_any_result<result_inner_type>;
   struct context {
     future_inner_type result;
+    result_inner_type temp_result;
     promise<future_inner_type> p;
     size_t total_futures = 0;
+    size_t ready_futures = 0;
     bool ready = false;
     bool result_set = false;
     std::mutex mutex;
@@ -769,9 +780,12 @@ auto when_any(InputIt first, InputIt last)
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
+  shared_context->temp_result.reserve(shared_context->total_futures);
+  shared_context->result.sequence.resize(shared_context->total_futures);
   size_t index = 0;
   for (; first != last; ++first, ++index) {
-    shared_context->result.sequence.push_back(first->then(
+    shared_context->temp_result.push_back(std::move(*first));
+    shared_context->temp_result[index].then(
     [shared_context, index]
     (std::iterator_traits<InputIt>::value_type f) mutable {
       {
@@ -780,14 +794,15 @@ auto when_any(InputIt first, InputIt last)
           shared_context->result.index = index;
           shared_context->ready = true;
         }
-        auto result_size = shared_context->result.sequence.size();
-        if (shared_context->total_futures == result_size) {
+        ++shared_context->ready_futures;
+        shared_context->result.sequence[index] = std::move(f);
+        if (shared_context->total_futures == shared_context->ready_futures) {
           shared_context->p.set_value(std::move(shared_context->result));
           shared_context->result_set = true;
         }
       }
-      return std::move(f);
-    }));
+      return unit();
+    });
   }
   {
     std::lock_guard<std::mutex> lock(shared_context->mutex);
@@ -800,14 +815,20 @@ auto when_any(InputIt first, InputIt last)
 namespace detail {
 template<size_t I, typename Context, typename Future>
 void when_any_inner_helper(Context context, Future&& f) {
-  f.then([context](Future f) {
-    std::lock_guard<std::mutex> lock(context->mutex);
-    ++context->ready_futures;
-    std::get<I>(context->result) = std::move(f);
-    if (context->ready_futures == context->total_futures)
-      context->p.set_value(std::move(context->result));
-    return unit();
-  });
+  std::get<I>(context->result.sequence) = 
+    f.then([context](Future f) {
+      std::lock_guard<std::mutex> lock(context->mutex);
+      ++context->ready_futures;
+      if (!context->ready) {
+        context->ready = true;
+        context->result.index = I;
+      }
+      if (context->ready_futures == context->total_futures) {
+        context->p.set_value(std::move(context->result));
+        context->result_set = true;
+      }
+      return std::move(f);
+    });
 }
 
 template<size_t I, typename Context, typename FirstFuture, typename... Futures>
@@ -822,18 +843,26 @@ void apply_when_any_helper(const Context& context) {}
 
 template<typename... Futures>
 auto when_any(Futures&&... futures)
--> future<std::tuple<std::decay_t<Futures>...>> {
+-> future<when_any_result<std::tuple<std::decay_t<Futures>...>>> {
   using result_inner_type = std::tuple<std::decay_t<Futures>...>;
+  using future_inner_type = when_any_result<result_inner_type>;
   struct context {
     size_t total_futures;
     size_t ready_futures = 0;
-    result_inner_type result;
-    promise<result_inner_type> p;
+    bool result_set = false;
+    bool ready = false;
+    future_inner_type result;
+    promise<future_inner_type> p;
     std::mutex mutex;
   };
   auto shared_context = std::make_shared<context>();
   shared_context->total_futures = sizeof...(futures);
   detail::apply_helper<0>(shared_context, std::forward<Futures>(futures)...);
+  {
+    std::lock_guard<std::mutex> lock(shared_context->mutex);
+    if (!shared_context->result_set && shared_context->ready)
+      shared_context->p.set_value(std::move(shared_context->result));
+  }
   return shared_context->p.get_future();
 }
 } // namespace cf
