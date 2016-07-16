@@ -498,6 +498,12 @@ detail::then_ret_type<T, F> future<T>::then(F&& f, Executor& executor) {
   return then_impl<F>(std::forward<F>(f), executor);
 }
 
+template<typename T>
+class promise;
+
+template<typename T>
+future<T> make_ready_future(T&& t);
+
 // future<R> F(future<T>) specialization
 template<typename T>
 template<typename F>
@@ -725,7 +731,7 @@ auto when_all(InputIt first, InputIt last)
     shared_context->temp_result.push_back(std::move(*first));
     shared_context->temp_result[index].then(
     [shared_context, index] 
-    (std::iterator_traits<InputIt>::value_type f) mutable {
+    (typename std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
         shared_context->result[index] = std::move(f);
@@ -753,14 +759,14 @@ void when_inner_helper(Context context, Future&& f) {
   });
 }
 
-template<size_t I, typename Context, typename FirstFuture, typename... Futures>
-void apply_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
-  when_inner_helper<I>(context, std::forward<FirstFuture>(f));
-  apply_helper<I+1>(context, std::forward<Futures>(fs)...);
-}
-
 template<size_t I, typename Context>
 void apply_helper(const Context& context) {}
+
+template<size_t I, typename Context, typename FirstFuture, typename... Futures>
+void apply_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
+  detail::when_inner_helper<I>(context, std::forward<FirstFuture>(f));
+  apply_helper<I+1>(context, std::forward<Futures>(fs)...);
+}
 }
 
 template<typename... Futures>
@@ -816,7 +822,7 @@ auto when_any(InputIt first, InputIt last)
     shared_context->temp_result.push_back(std::move(*first));
     shared_context->temp_result[index].then(
     [shared_context, index]
-    (std::iterator_traits<InputIt>::value_type f) mutable {
+    (typename std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
         if (!shared_context->ready) {
@@ -864,14 +870,14 @@ void when_any_inner_helper(Context context, Future&& f) {
   ++context->futures_in_result;
 }
 
+template<size_t I, typename Context>
+void apply_when_any_helper(const Context& context) {}
+
 template<size_t I, typename Context, typename FirstFuture, typename... Futures>
 void apply_when_any_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
   when_any_inner_helper<I>(context, std::forward<FirstFuture>(f));
   apply_when_any_helper<I+1>(context, std::forward<Futures>(fs)...);
 }
-
-template<size_t I, typename Context>
-void apply_when_any_helper(const Context& context) {}
 }
 
 template<typename... Futures>
