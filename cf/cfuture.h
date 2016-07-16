@@ -124,9 +124,11 @@ class async_thread_pool_executor {
     bool ready = true;
   };
   using tp_type = std::vector<thread_busy>;
+  using tp_iterator_type = tp_type::iterator;
 public:
   async_thread_pool_executor(size_t size)
-    : tp_(size) {}
+    : tp_(size),
+      tp_iter_(tp_.end()) {}
 
   void post(const detail::task_type& task) {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -136,13 +138,30 @@ public:
     });
     if (ready_it != tp_.end()) {
       ready_it->ready = false;
-      ready_it->thread = std::thread([this, ready_it] {
-
+      ready_it->thread = std::thread([this, ready_it, task] {
+        task();
+        std::lock_guard<std::mutex> lock(mutex_);
+        ready_it->ready = true;
+        tp_iter_ = ready_it;
+        cond_.notify_one();
+      });
+    } else {
+      cond_.wait(lock, [this] {return tp_iter_ != tp_.end();});
+      ready_it->thread.join();
+      ready_it->ready = false;
+      ready_it->thread = std::thread([this, ready_it, task] {
+        task();
+        std::lock_guard<std::mutex> lock(mutex_);
+        ready_it->ready = true;
+        tp_iter_ = ready_it;
+        cond_.notify_one();
       });
     }
   }
+
 private:
   tp_type tp_;
+  tp_iterator_type tp_iter_;
   std::condition_variable cond_;
   std::mutex mutex_;
 };
@@ -547,7 +566,6 @@ typename std::enable_if<
 >::type
 future<T>::then_impl(F&& f) {
   using R = detail::then_arg_ret_type<T, F>;
-  using this_future_type = future<T>;
   promise<R> p;
   future<R> ret = p.get_future();
   set_callback([p = std::move(p), f = std::forward<F>(f),
