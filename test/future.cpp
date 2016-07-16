@@ -295,4 +295,8 @@ TEST_CASE("When any") {
     REQUIRE(when_any_result.index == 1);
     REQUIRE(std::get<1>(when_any_result.sequence).get() == cf::unit());
   }
+
+  SECTION("When any w executors") {
+    //cf::async_queued_executor()
+  }
 }

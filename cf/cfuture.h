@@ -118,6 +118,35 @@ private:
   bool need_stop_;
 };
 
+class async_thread_pool_executor {
+  struct thread_busy {
+    std::thread thread;
+    bool ready = true;
+  };
+  using tp_type = std::vector<thread_busy>;
+public:
+  async_thread_pool_executor(size_t size)
+    : tp_(size) {}
+
+  void post(const detail::task_type& task) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
+    [](const thread_busy& tb) {
+      return tb.ready;
+    });
+    if (ready_it != tp_.end()) {
+      ready_it->ready = false;
+      ready_it->thread = std::thread([this, ready_it] {
+
+      });
+    }
+  }
+private:
+  tp_type tp_;
+  std::condition_variable cond_;
+  std::mutex mutex_;
+};
+
 // This is the void type analogue. 
 // Future<void> and promise<void> are explicitly forbidden.
 // If you need future just to signal that the async operation is ready,
