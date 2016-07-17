@@ -146,7 +146,8 @@ cf::future<double> tfoo(cf::future<int> f) {
   return cf::make_ready_future<double>(f.get());
 }
 
-TEST_CASE("Then simple test") {
+TEST_CASE("Then test") {
+  // TODO: f = f.then() test
   SECTION("Continuation returns future") {
     auto cont = [](cf::future<double> f) -> cf::future<char> {
       return cf::make_ready_future<char>(f.get());

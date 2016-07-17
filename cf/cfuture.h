@@ -121,21 +121,80 @@ private:
 // TODO: Rewrite tp executor so all threads are started and waiting at beginning
 
 class async_thread_pool_executor {
-  struct thread_busy {
-    std::thread thread;
-    bool ready = true;
+  class worker_thread {
+  public:
+    worker_thread() {
+      thread_ = std::thread([this] {
+        while (true) {
+          std::unique_lock<std::mutex> lock(m_);
+          start_cond_.wait(lock, [this] {return (bool)task_ || need_stop_; });
+          if (need_stop_)
+            return;
+          lock.unlock();
+          task_();
+          lock.lock();
+          task_ = nullptr;
+          wait_cond_.notify_all();
+          pool_cond_->notify_all();
+        }
+      });
+    }
+
+    ~worker_thread() {
+      stop();
+    }
+
+    void stop() {
+      std::lock_guard<std::mutex> lock(m_);
+      need_stop_ = true;
+      if (thread_.joinable())
+        thread_.join();
+    }
+
+    bool available() const {
+      std::lock_guard<std::mutex> lock(m_);
+      return !(bool)task_;
+    }
+
+    void post(const detail::task_type& task,
+              std::condition_variable& pool_cond) {
+      std::unique_lock<std::mutex> lock(m_);
+      if (!task_) {
+        start_task(task, pool_cond);
+      } else {
+        wait_cond_.wait(lock, [this] { return !task_; });
+        start_task(task, pool_cond);
+      }
+    }
+  private:
+    void start_task(const detail::task_type& task,
+                    std::condition_variable& pool_cond) {
+        task_ = task_;
+        pool_cond_ = &pool_cond;
+        start_cond_.notify_all();
+    }
+  private:
+    std::thread thread_;
+    mutable std::mutex m_;
+    bool need_stop_ = false;
+    std::condition_variable wait_cond_;
+    std::condition_variable start_cond_;
+    std::condition_variable* pool_cond_;
+    detail::task_type task_;
   };
-  using tp_type = std::vector<thread_busy>;
-  using tp_iterator_type = tp_type::iterator;
+
+  using tp_type = std::vector<worker_thread>;
+
 public:
   async_thread_pool_executor(size_t size)
     : tp_(size),
-      ready_threads_(size) {}
+      ready_threads_(size) {
+
+  }
 
   ~async_thread_pool_executor() {
-    for (auto& t : tp_) {
-      if (t.thread.joinable())
-        t.thread.join();
+    for (auto& worker : tp_) {
+      worker.stop();
     }
   }
 
@@ -147,8 +206,8 @@ public:
   void post(const detail::task_type& task) {
     std::unique_lock<std::mutex> lock(mutex_);
     auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
-    [](const thread_busy& tb) {
-      return tb.ready;
+    [](const worker_thread& worker) {
+      return worker.available();
     });
     if (ready_it != tp_.end()) {
       start_thread(task, *ready_it);
@@ -165,10 +224,7 @@ public:
   }
 
 private:
-  void start_thread(const detail::task_type& task, thread_busy& t) {
-    t.ready = false;
-    if (t.thread.joinable())
-      t.thread.join();
+  void start_thread(const detail::task_type& task, worker_thread& t) {
     --ready_threads_;
     t.thread = std::thread([this, task, &t] {
       task();
@@ -184,6 +240,7 @@ private:
   size_t ready_threads_;
   std::condition_variable cond_;
   mutable std::mutex mutex_;
+  std::atomic<bool> need_stop_;
 };
 
 // This is the void type analogue. 
