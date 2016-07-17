@@ -118,6 +118,8 @@ private:
   bool need_stop_;
 };
 
+// TODO: Rewrite tp executor so all threads are started and waiting at beginning
+
 class async_thread_pool_executor {
   struct thread_busy {
     std::thread thread;
@@ -737,6 +739,7 @@ future<U> make_exceptional_future(std::exception_ptr p) {
   return future<U>(state);
 }
 
+// TODO: async with executor
 template<typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
