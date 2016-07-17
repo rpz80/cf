@@ -137,6 +137,11 @@ public:
     }
   }
 
+  size_t available() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return ready_threads_;
+  }
+
   void post(const detail::task_type& task) {
     std::unique_lock<std::mutex> lock(mutex_);
     auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
@@ -144,36 +149,39 @@ public:
       return tb.ready;
     });
     if (ready_it != tp_.end()) {
-      ready_it->ready = false;
-      if (ready_it->thread.joinable())
-        ready_it->thread.join();
-      --ready_threads_;
-      ready_it->thread = std::thread([this, ready_it, task] {
-        task();
-        std::lock_guard<std::mutex> lock(mutex_);
-        ready_it->ready = true;
-        ++ready_threads_;
-        cond_.notify_one();
-      });
+      start_thread(task, *ready_it);
     } else {
       cond_.wait(lock, [this] { return ready_threads_ > 0; });
-      if (ready_it->thread.joinable())
-        ready_it->thread.join();
-      ready_it->ready = false;
-      ready_it->thread = std::thread([this, ready_it, task] {
-        task();
-        std::lock_guard<std::mutex> lock(mutex_);
-        ready_it->ready = true;
-        cond_.notify_one();
+      ready_it = std::find_if(tp_.begin(), tp_.end(), 
+      [](const thread_busy& tb) {
+        return tb.ready;
       });
+      if (ready_it == tp_.end())
+        throw std::logic_error("Can't find ready for use thread");
+      start_thread(task, *ready_it);
     }
+  }
+
+private:
+  void start_thread(const detail::task_type& task, thread_busy& t) {
+    t.ready = false;
+    if (t.thread.joinable())
+      t.thread.join();
+    --ready_threads_;
+    t.thread = std::thread([this, task, &t] {
+      task();
+      std::lock_guard<std::mutex> lock(mutex_);
+      t.ready = true;
+      ++ready_threads_;
+      cond_.notify_one();
+    });
   }
 
 private:
   tp_type tp_;
   size_t ready_threads_;
   std::condition_variable cond_;
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
 };
 
 // This is the void type analogue. 

@@ -219,16 +219,23 @@ TEST_CASE("Executors") {
 
   SECTION("Thread pool executor") {
     cf::async_thread_pool_executor executor(5);
-    cf::future<int> f = cf::make_ready_future(0);
-    for (size_t i = 0; i < 10; ++i) {
-      f = f.then([i](cf::future<int> f) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5*(i+3)));
-        int val = f.get();
-        REQUIRE(val == i);
-        return ++val;
-      }, executor);
+
+    SECTION("basic") {
+
     }
-    REQUIRE(f.get() == 10);
+
+    SECTION("future") {
+      cf::future<int> f = cf::make_ready_future(0);
+      for (size_t i = 0; i < 10; ++i) {
+        f = f.then([i](cf::future<int> f) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(5 * (i + 3)));
+          int val = f.get();
+          REQUIRE(val == i);
+          return ++val;
+        }, executor);
+      }
+      REQUIRE(f.get() == 10);
+    }
   }
 }
 
