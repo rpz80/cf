@@ -218,13 +218,51 @@ TEST_CASE("Executors") {
   }
 
   SECTION("Thread pool executor") {
-    cf::async_thread_pool_executor executor(5);
-
     SECTION("basic") {
+      cf::async_thread_pool_executor executor(2);
+      REQUIRE(executor.available() == 2);
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      });
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      });
+      REQUIRE(executor.available() == 0);
+      std::this_thread::sleep_for(std::chrono::milliseconds(105));
+      REQUIRE(executor.available() == 1);
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      });
+      REQUIRE(executor.available() == 0);
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      REQUIRE(executor.available() == 2);
+    }
 
+    SECTION("basic wait") {
+      cf::async_thread_pool_executor executor(2);
+      REQUIRE(executor.available() == 2);
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      });
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      });
+      REQUIRE(executor.available() == 0);
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      });
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      REQUIRE(executor.available() == 0);
+      executor.post([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      });
+      REQUIRE(executor.available() == 0);
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      REQUIRE(executor.available() == 2);
     }
 
     SECTION("future") {
+      cf::async_thread_pool_executor executor(5);
       cf::future<int> f = cf::make_ready_future(0);
       for (size_t i = 0; i < 10; ++i) {
         f = f.then([i](cf::future<int> f) {
