@@ -128,7 +128,14 @@ class async_thread_pool_executor {
 public:
   async_thread_pool_executor(size_t size)
     : tp_(size),
-      tp_iter_(tp_.end()) {}
+      ready_threads_(size) {}
+
+  ~async_thread_pool_executor() {
+    for (auto& t : tp_) {
+      if (t.thread.joinable())
+        t.thread.join();
+    }
+  }
 
   void post(const detail::task_type& task) {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -138,22 +145,25 @@ public:
     });
     if (ready_it != tp_.end()) {
       ready_it->ready = false;
+      if (ready_it->thread.joinable())
+        ready_it->thread.join();
+      --ready_threads_;
       ready_it->thread = std::thread([this, ready_it, task] {
         task();
         std::lock_guard<std::mutex> lock(mutex_);
         ready_it->ready = true;
-        tp_iter_ = ready_it;
+        ++ready_threads_;
         cond_.notify_one();
       });
     } else {
-      cond_.wait(lock, [this] {return tp_iter_ != tp_.end();});
-      ready_it->thread.join();
+      cond_.wait(lock, [this] { return ready_threads_ > 0; });
+      if (ready_it->thread.joinable())
+        ready_it->thread.join();
       ready_it->ready = false;
       ready_it->thread = std::thread([this, ready_it, task] {
         task();
         std::lock_guard<std::mutex> lock(mutex_);
         ready_it->ready = true;
-        tp_iter_ = ready_it;
         cond_.notify_one();
       });
     }
@@ -161,7 +171,7 @@ public:
 
 private:
   tp_type tp_;
-  tp_iterator_type tp_iter_;
+  size_t ready_threads_;
   std::condition_variable cond_;
   std::mutex mutex_;
 };
@@ -255,11 +265,6 @@ public:
   }
 
   void set_ready(std::unique_lock<std::mutex>& lock) {
-    // No lock here, because this should be called 
-    // when mutex has been already locked.
-    if (satisfied_)
-      throw future_error(errc::promise_already_satisfied, 
-                         errc_string(errc::promise_already_satisfied));
     satisfied_ = true;
     cond_.notify_all();
     lock.unlock();
@@ -282,6 +287,7 @@ public:
 
   void set_exception(std::exception_ptr p) {
     std::unique_lock<std::mutex> lock(mutex_);
+    throw_if_satisfied();
     exception_ptr_ = p;
     set_ready(lock);
   }
@@ -307,6 +313,13 @@ public:
   }
 
 protected:
+  void throw_if_satisfied() {
+    if (satisfied_)
+      throw future_error(errc::promise_already_satisfied, 
+                         errc_string(errc::promise_already_satisfied));
+  }
+
+protected:
   mutable std::mutex mutex_;
   mutable std::condition_variable cond_;
   std::atomic<bool> satisfied_;
@@ -324,6 +337,7 @@ public:
   template<typename U>
   void set_value(U&& value) {
     std::unique_lock<std::mutex> lock(base_type::mutex_);
+    base_type::throw_if_satisfied();
     value_ = std::forward<U>(value);
     base_type::set_ready(lock);
   }

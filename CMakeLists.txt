@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 project("cf")
-if (MSCV)
+if (MSVC)
   set(CMAKE_CXX_FLAGS "/EHsc")
 else()
   set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -pedantic")
