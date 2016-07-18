@@ -118,8 +118,6 @@ private:
   bool need_stop_;
 };
 
-// TODO: Rewrite tp executor so all threads are started and waiting at beginning
-
 class async_thread_pool_executor {
   class worker_thread {
   public:
