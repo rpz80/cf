@@ -3,7 +3,7 @@ project("cf")
 if (MSVC)
   set(CMAKE_CXX_FLAGS "/EHsc")
 else()
-  set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -pedantic")
+  set(CMAKE_CXX_FLAGS "-std=c++14 -pedantic")
 endif()
 
 set(INCLUDES "${CMAKE_SOURCE_DIR}")
