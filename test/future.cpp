@@ -124,18 +124,58 @@ TEST_CASE("Future") {
     } // set exception
 
   }
+
+  SECTION("executors mixed with async")
+  {
+    cf::async_thread_pool_executor executor(2);
+    auto start_point = std::chrono::steady_clock::now();
+    
+    auto f = cf::async([]{
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      return 5;
+    }).then([](cf::future<int> f) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      return f.get() * 5;
+    }, executor).then([](cf::future<int> f) {
+      return cf::async([f = std::move(f)]() mutable {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return f.get() * 5;
+      });
+    });
+    
+    REQUIRE(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_point).count() < 5);
+    REQUIRE(f.get() == 125);
+    
+    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_point);
+    
+    REQUIRE(diff >= std::chrono::milliseconds(25));
+    REQUIRE(diff < std::chrono::milliseconds(40));
+  }
+
+  SECTION("Simple several threads") {
+    cf::promise<std::string> p;
+    auto f = p.get_future();
+    std::thread([p = std::move(p)] () mutable {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      p.set_value("Hi!");
+    }).detach();
+    REQUIRE(f.get() == "Hi!");
+  }
 }
 
-TEST_CASE("Make future functions") {
-  SECTION("Make ready") {
+TEST_CASE("Make future functions")
+{
+  SECTION("Make ready")
+  {
     cf::future<int> f = cf::make_ready_future(42);
     REQUIRE(f.is_ready());
     REQUIRE(f.valid());
     REQUIRE(f.get() == 42);
   }
-  SECTION("Make excetion") {
-    cf::future<int> f = cf::make_exceptional_future<int>(
-      std::make_exception_ptr(std::logic_error("whatever")));
+  
+  SECTION("Make excetion")
+  {
+    cf::future<int> f = cf::make_exceptional_future<int>(std::make_exception_ptr(std::logic_error("whatever")));
     REQUIRE(f.is_ready());
     REQUIRE(f.valid());
     REQUIRE_THROWS(f.get());
@@ -200,9 +240,11 @@ TEST_CASE("Async") {
 }
 
 TEST_CASE("Executors") {
-  SECTION("Async queued executor") {
+  SECTION("Async queued executor")
+  {
     cf::async_queued_executor executor;
     int counter = 0;
+    
     auto result = cf::async([&counter] {
       ++counter;
       return 42;
@@ -214,6 +256,7 @@ TEST_CASE("Executors") {
       ++counter;
       return f.get() + " world!";
     }, executor);
+    
     REQUIRE(result.get() == "Hello world!");
     REQUIRE(counter == 3);
   }

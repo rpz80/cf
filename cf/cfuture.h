@@ -16,6 +16,9 @@ namespace cf {
 
 namespace detail {
 
+// We can't use std::function as continuation holder, as it 
+// requires held type to be copyable. So here is simple move-only
+// callable wrapper.
 template<typename F>
 class movable_func;
 
@@ -815,7 +818,7 @@ auto when_all(InputIt first, InputIt last)
     std::vector<typename std::iterator_traits<InputIt>::value_type>;
   struct context {
     size_t total_futures = 0;
-	size_t ready_futures = 0;
+    size_t ready_futures = 0;
     result_inner_type result;
     result_inner_type temp_result;
     std::mutex mutex;
