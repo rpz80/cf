@@ -20,25 +20,34 @@ TEST_CASE("Types") {
     test_struct ts;
     auto ts_bar1 = std::bind(&test_struct::bar1, &ts, std::placeholders::_1);
 
-    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type<char, decltype(foo)>>::value) == true);
-    REQUIRE((std::is_same<double, cf::detail::then_arg_ret_type<int, decltype(foo1)>>::value) == true);
-    REQUIRE((std::is_same<int, cf::detail::then_arg_ret_type<bool, decltype(foo2)>>::value) == true);
-    REQUIRE((std::is_same<cf::unit, cf::detail::then_arg_ret_type<baz, decltype(ts_bar1)>>::value) == true);
-    REQUIRE((std::is_same<cf::future<double>, cf::detail::then_arg_ret_type<int, decltype(foo3)>>::value) == true);
+    REQUIRE((std::is_same<int, cf::detail::
+        then_arg_ret_type<char, decltype(foo)>>::value) == true);
+    REQUIRE((std::is_same<double, cf::detail::
+        then_arg_ret_type<int, decltype(foo1)>>::value) == true);
+    REQUIRE((std::is_same<int, cf::detail::
+        then_arg_ret_type<bool, decltype(foo2)>>::value) == true);
+    REQUIRE((std::is_same<cf::unit, cf::detail::
+        then_arg_ret_type<baz, decltype(ts_bar1)>>::value) == true);
+    REQUIRE((std::is_same<cf::future<double>, cf::detail::
+        then_arg_ret_type<int, decltype(foo3)>>::value) == true);
   }
 
   SECTION("Is future check") {
-    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type<char, decltype(foo)>>::value) == false);
-    REQUIRE((cf::detail::is_future<cf::detail::then_arg_ret_type<int, decltype(foo3)>>::value) == true);
+    REQUIRE((cf::detail::is_future<cf::detail::
+        then_arg_ret_type<char, decltype(foo)>>::value) == false);
+    REQUIRE((cf::detail::is_future<cf::detail::
+        then_arg_ret_type<int, decltype(foo3)>>::value) == true);
   }
 
   SECTION("Get return type for future::then") {
     using namespace cf::detail;
     using then_ret_type_for_foo = then_ret_type<char, decltype(foo)>;
-    REQUIRE((std::is_same<then_ret_type_for_foo, cf::future<int>>::value) == true);
+    REQUIRE((std::is_same<then_ret_type_for_foo,
+                          cf::future<int>>::value) == true);
 
     using then_ret_type_for_foo3 = then_ret_type<int, decltype(foo3)>;
-    REQUIRE((std::is_same<then_ret_type_for_foo3, cf::future<double>>::value) == true);
+    REQUIRE((std::is_same<then_ret_type_for_foo3,
+                          cf::future<double>>::value) == true);
   }
 }
 
@@ -64,7 +73,8 @@ TEST_CASE("Future") {
             REQUIRE(false);
           } catch (const cf::future_error& error) {
             REQUIRE(error.ecode() == cf::errc::future_already_retrieved);
-            REQUIRE(error.what() == cf::errc_string(cf::errc::future_already_retrieved));
+            REQUIRE(error.what() ==
+                    cf::errc_string(cf::errc::future_already_retrieved));
           }
         }
 
@@ -125,8 +135,7 @@ TEST_CASE("Future") {
 
   }
 
-  SECTION("executors mixed with async")
-  {
+  SECTION("executors mixed with async") {
     cf::async_thread_pool_executor executor(2);
     auto start_point = std::chrono::steady_clock::now();
     
@@ -143,10 +152,13 @@ TEST_CASE("Future") {
       });
     });
     
-    REQUIRE(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_point).count() < 5);
+    REQUIRE(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_point).count() < 5);
+    
     REQUIRE(f.get() == 125);
     
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_point);
+    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_point);
     
     REQUIRE(diff >= std::chrono::milliseconds(25));
     REQUIRE(diff < std::chrono::milliseconds(40));
@@ -175,7 +187,8 @@ TEST_CASE("Make future functions")
   
   SECTION("Make excetion")
   {
-    cf::future<int> f = cf::make_exceptional_future<int>(std::make_exception_ptr(std::logic_error("whatever")));
+    cf::future<int> f = cf::make_exceptional_future<int>(
+        std::make_exception_ptr(std::logic_error("whatever")));
     REQUIRE(f.is_ready());
     REQUIRE(f.valid());
     REQUIRE_THROWS(f.get());
@@ -201,7 +214,8 @@ TEST_CASE("Then test") {
   }
 
   SECTION("Continuation returns non future") {
-    auto result = cf::make_ready_future<int>(42).then([](cf::future<int> f) -> double {
+    auto result = cf::make_ready_future<int>(42).then(
+    [](cf::future<int> f) -> double {
       return (double)f.get();
     }).then([](cf::future<double> f) -> char {
       return (char)f.get();
@@ -308,6 +322,7 @@ TEST_CASE("Executors") {
     SECTION("future") {
       cf::async_thread_pool_executor executor(5);
       cf::future<int> f = cf::make_ready_future(0);
+      
       for (size_t i = 0; i < 10; ++i) {
         f = f.then([i](cf::future<int> f) {
           std::this_thread::sleep_for(std::chrono::milliseconds(5 * (i + 3)));
@@ -316,6 +331,7 @@ TEST_CASE("Executors") {
           return ++val;
         }, executor);
       }
+      
       REQUIRE(f.get() == 10);
     }
   }
@@ -358,32 +374,33 @@ TEST_CASE("When all") {
 }
 
 TEST_CASE("When any") {
- SECTION("Simple vector") {
-    const size_t size = 5;
-    std::vector<cf::future<int>> vec;
-
-    SECTION("Async") {
-      for (size_t i = 0; i < size; ++i) {
-        vec.push_back(cf::async([i, size] {
-          std::this_thread::sleep_for(
-            std::chrono::milliseconds((size - i) * 30));
-          return (int)i;
-        }));
-      }
-      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
-      REQUIRE(when_any_result.sequence.size() == size);
-      REQUIRE(when_any_result.index == 4);
-    }
-
-    SECTION("Ready futures") {
-      for (size_t i = 0; i < size; ++i) {
-        vec.push_back(cf::make_ready_future((int)i));
-      }
-      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
-      REQUIRE(when_any_result.sequence.size() == size);
-      REQUIRE(when_any_result.index == 0);
-    }
-  }
+//  SECTION("Simple vector") {
+//    const size_t size = 5;
+//    std::vector<cf::future<int>> vec;
+//
+//    SECTION("Async")    {
+//      for (size_t i = 0; i < size; ++i) {
+//        vec.push_back(cf::async([i, size] {
+//          std::this_thread::sleep_for(std::chrono::milliseconds((size - i) * 30));
+//          return (int)i;
+//        }));
+//      }
+//      
+//      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
+//      REQUIRE(when_any_result.sequence.size() == size);
+//      REQUIRE(when_any_result.index == 4);
+//    }
+//
+//    SECTION("Ready futures") {
+//      for (size_t i = 0; i < size; ++i) {
+//        vec.push_back(cf::make_ready_future((int)i));
+//      }
+//      
+//      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
+//      REQUIRE(when_any_result.sequence.size() == size);
+//      REQUIRE(when_any_result.index == 0);
+//    }
+//  }
 
   SECTION("Simple tuple") {
     auto when_any_result = cf::when_any(
@@ -395,11 +412,47 @@ TEST_CASE("When any") {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         return cf::unit(); 
       })).get();
+    
     REQUIRE(when_any_result.index == 1);
     REQUIRE(std::get<1>(when_any_result.sequence).get() == cf::unit());
   }
 
-  SECTION("When any w executors") {
-    //cf::async_queued_executor()
+  SECTION("When w executors") {
+    cf::async_queued_executor queue_executor;
+    cf::async_thread_pool_executor tp_executor(1);
+    
+    auto when_any_result = cf::when_any(
+      cf::make_ready_future<std::string>("Hello ").then(
+        [] (cf::future<std::string> f) mutable {
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          return f.get() + "composable ";
+        }, queue_executor).then([] (cf::future<std::string> f) mutable {
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          return f.get() + "futures!";
+        }, tp_executor),
+      cf::make_ready_future<std::string>("Hello ").then(
+        [] (cf::future<std::string> f) mutable {
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          return f.get() + "composable ";
+        }, queue_executor).then([] (cf::future<std::string> f) mutable {
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          return f.get() + "futures ";
+        }, tp_executor).then([] (cf::future<std::string> f) mutable {
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          return f.get() + "world!";
+        }, tp_executor)).get();
+    
+    REQUIRE(std::get<1>(when_any_result.sequence).is_ready() == false);
+    
+    REQUIRE(when_any_result.index == 0);
+    REQUIRE(std::get<0>(when_any_result.sequence).get() ==
+            "Hello composable futures!");
+    
+    auto next_when_any_result = cf::when_any(
+      std::move(std::get<1>(when_any_result.sequence))).get();
+    
+    REQUIRE(next_when_any_result.index == 0);
+    REQUIRE(std::get<0>(next_when_any_result.sequence).get() ==
+            "Hello composable futures world!");    
   }
 }

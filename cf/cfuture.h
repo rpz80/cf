@@ -126,6 +126,7 @@ class async_thread_pool_executor {
   public:
     worker_thread() {
       thread_ = std::thread([this] {
+        id_ = std::this_thread::get_id();
         while (!need_stop_) {
           std::unique_lock<std::mutex> lock(m_);
           start_cond_.wait(lock, [this] {
@@ -161,16 +162,30 @@ class async_thread_pool_executor {
 
     bool available() const {
       std::lock_guard<std::mutex> lock(m_);
+      return available_no_lock();
+    }
+    
+    bool available_no_lock() const {
       return !(bool)task_;
+    }
+    
+    std::thread::id get_id() const {
+      return id_;
     }
 
     void post(const detail::task_type& task,
               const detail::task_type& completion_cb) {
       std::unique_lock<std::mutex> lock(m_);
-      if (task_) 
+      post_no_lock(task, completion_cb);
+    }
+    
+    void post_no_lock(const detail::task_type& task,
+                      const detail::task_type& completion_cb) {
+      if (task_)
         throw std::logic_error("Worker already has a pending task");
       start_task(task, completion_cb);
     }
+
 
   private:
     void start_task(const detail::task_type& task,
@@ -182,6 +197,7 @@ class async_thread_pool_executor {
 
   private:
     std::thread thread_;
+    std::thread::id id_;
     mutable std::mutex m_;
     bool need_stop_ = false;
     std::condition_variable start_cond_;
@@ -211,39 +227,47 @@ public:
 
   void post(const detail::task_type& task) {
     std::unique_lock<std::mutex> lock(mutex_);
-    auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
-    [](const worker_thread& worker) {
-      return worker.available();
-    });
-    if (ready_it != tp_.end()) {
-      start_thread(task, *ready_it);
-    } else {
-      cond_.wait(lock, [this] { return ready_threads_ > 0; });
-      ready_it = std::find_if(tp_.begin(), tp_.end(), 
-      [](const worker_thread& worker) {
-        return worker.available();
-      });
-      if (ready_it == tp_.end())
-        throw std::logic_error("Can't find ready for use thread");
-      start_thread(task, *ready_it);
-    }
+    try_post(task);
   }
 
 private:
   void start_thread(const detail::task_type& task, worker_thread& worker) {
     --ready_threads_;
-    worker.post(task, [this] {
+    auto cb = [this] {
       std::lock_guard<std::mutex> lock(mutex_);
       ++ready_threads_;
-      cond_.notify_one();
+      if (!task_queue_.empty()) {
+        detail::task_type new_task = task_queue_.front();
+        task_queue_.pop();
+        try_post(new_task);
+      }
+    };
+    if (std::this_thread::get_id() != worker.get_id())
+      worker.post(task, cb);
+    else
+      worker.post_no_lock(task, cb);
+  }
+  
+  void try_post(const detail::task_type& task) {
+    auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
+    [](const worker_thread& worker) {
+      if (std::this_thread::get_id() != worker.get_id())
+        return worker.available();
+      else
+        return worker.available_no_lock();
     });
+    if (ready_it != tp_.end()) {
+      start_thread(task, *ready_it);
+    } else {
+      task_queue_.push(task);
+    }
   }
 
 private:
   tp_type tp_;
   size_t ready_threads_;
-  std::condition_variable cond_;
   mutable std::mutex mutex_;
+  std::queue<detail::task_type> task_queue_;
 };
 
 // This is the void type analogue. 
@@ -954,23 +978,17 @@ auto when_any(InputIt first, InputIt last)
 namespace detail {
 template<size_t I, typename Context, typename Future>
 void when_any_inner_helper(Context context, Future&& f) {
-  std::get<I>(context->temp_result) = std::move(f);
-  std::get<I>(context->temp_result).then(
-    [context](Future f) {
+  std::get<I>(context->result.sequence).then(
+  [context](Future f) {
     std::lock_guard<std::mutex> lock(context->mutex);
     if (!context->ready) {
       context->ready = true;
       context->result.index = I;
-    }
-    std::get<I>(context->result.sequence) = std::move(f);
-    if (context->futures_in_result == context->total_futures) {
+      std::get<I>(context->result.sequence) = std::move(f);
       context->p.set_value(std::move(context->result));
-      context->result_set = true;
     }
-    return std::move(f);
+    return unit();
   });
-  std::lock_guard<std::mutex> lock(context->mutex);
-  ++context->futures_in_result;
 }
 
 template<size_t I, typename Context>
@@ -981,6 +999,16 @@ void apply_when_any_helper(const Context& context, FirstFuture&& f, Futures&&...
   when_any_inner_helper<I>(context, std::forward<FirstFuture>(f));
   apply_when_any_helper<I+1>(context, std::forward<Futures>(fs)...);
 }
+
+template<size_t I, typename Context>
+void fill_result_helper(const Context& context) {}
+
+template<size_t I, typename Context, typename FirstFuture, typename... Futures>
+void fill_result_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
+  std::get<I>(context->result.sequence) = std::move(f);
+  fill_result_helper<I+1>(context, std::forward<Futures>(fs)...);
+}
+
 }
 
 template<typename... Futures>
@@ -989,23 +1017,14 @@ auto when_any(Futures&&... futures)
   using result_inner_type = std::tuple<std::decay_t<Futures>...>;
   using future_inner_type = when_any_result<result_inner_type>;
   struct context {
-    size_t total_futures;
-    size_t futures_in_result = 0;
-    bool result_set = false;
     bool ready = false;
     future_inner_type result;
-    result_inner_type temp_result;
     promise<future_inner_type> p;
     std::mutex mutex;
   };
   auto shared_context = std::make_shared<context>();
-  shared_context->total_futures = sizeof...(futures);
+  detail::fill_result_helper<0>(shared_context, std::forward<Futures>(futures)...);
   detail::apply_when_any_helper<0>(shared_context, std::forward<Futures>(futures)...);
-  {
-    std::lock_guard<std::mutex> lock(shared_context->mutex);
-    if (!shared_context->result_set && shared_context->ready)
-      shared_context->p.set_value(std::move(shared_context->result));
-  }
   return shared_context->p.get_future();
 }
 } // namespace cf
