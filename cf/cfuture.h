@@ -133,7 +133,9 @@ class async_thread_pool_executor {
           });
           if (need_stop_)
             return;
+          lock.unlock();
           task_();
+          lock.lock();
           task_ = nullptr;
           completion_cb_();
         }
@@ -224,7 +226,6 @@ public:
   }
 
   size_t available() const {
-    std::lock_guard<std::mutex> lock(mutex_);
     return std::count_if(tp_.begin(), tp_.end(), 
     [](const worker_thread& worker) { 
       return worker.available();
