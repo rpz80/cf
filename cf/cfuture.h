@@ -133,9 +133,7 @@ class async_thread_pool_executor {
           });
           if (need_stop_)
             return;
-          lock.unlock();
           task_();
-          lock.lock();
           task_ = nullptr;
           completion_cb_();
         }
@@ -191,34 +189,26 @@ class async_thread_pool_executor {
 public:
   async_thread_pool_executor(size_t size)
     : tp_(size),
-      ready_threads_(size),
       need_stop_(false) {
     manager_thread_ = std::thread([this] {
       while (!need_stop_) {
         std::unique_lock<std::mutex> lock(mutex_);
         cond_.wait(lock, [this] {
-          return need_stop_ || (!task_queue_.empty() && ready_threads_); 
+          return need_stop_ || !task_queue_.empty(); 
         });
         if (need_stop_)
           return;
-        if (ready_threads_) {
-          auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
-          [](const worker_thread& worker) {
-              return worker.available();
-          });
-          if (ready_it == tp_.end())
-            throw std::logic_error("Can't find ready thread");
-          --ready_threads_;
-          auto task = task_queue_.front();
-          task_queue_.pop();
-          ready_it->post(task, [this] {
-            {
-              std::lock_guard<std::mutex> lock(mutex_);
-              ++ready_threads_;
-            }
-            cond_.notify_all();
-          });
-        }
+        auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
+        [](const worker_thread& worker) {
+            return worker.available();
+        });
+        if (ready_it == tp_.end())
+          continue;
+        auto task = task_queue_.front();
+        task_queue_.pop();
+        ready_it->post(task, [this] {
+          cond_.notify_all();
+        });
       }
     });
   }
@@ -235,7 +225,10 @@ public:
 
   size_t available() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return ready_threads_;
+    return std::count_if(tp_.begin(), tp_.end(), 
+    [](const worker_thread& worker) { 
+      return worker.available();
+    });
   }
 
   void post(const detail::task_type& task) {
@@ -248,7 +241,6 @@ public:
 
 private:
   tp_type tp_;
-  size_t ready_threads_;
   mutable std::mutex mutex_;
   std::queue<detail::task_type> task_queue_;
   std::thread manager_thread_;
