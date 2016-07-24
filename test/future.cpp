@@ -300,10 +300,10 @@ TEST_CASE("Executors") {
       cf::async_thread_pool_executor executor(2);
       REQUIRE(executor.available() == 2);
       executor.post([] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
       });
       executor.post([] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
       });
       REQUIRE(executor.available() == 0);
       executor.post([] {

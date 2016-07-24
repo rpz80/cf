@@ -126,7 +126,6 @@ class async_thread_pool_executor {
   public:
     worker_thread() {
       thread_ = std::thread([this] {
-        id_ = std::this_thread::get_id();
         while (!need_stop_) {
           std::unique_lock<std::mutex> lock(m_);
           start_cond_.wait(lock, [this] {
@@ -138,10 +137,7 @@ class async_thread_pool_executor {
           task_();
           lock.lock();
           task_ = nullptr;
-          if (completion_cb_) {
-            completion_cb_();
-            completion_cb_ = nullptr;
-          }
+          completion_cb_();
         }
       });
     }
@@ -162,30 +158,16 @@ class async_thread_pool_executor {
 
     bool available() const {
       std::lock_guard<std::mutex> lock(m_);
-      return available_no_lock();
-    }
-    
-    bool available_no_lock() const {
       return !(bool)task_;
     }
     
-    std::thread::id get_id() const {
-      return id_;
-    }
-
     void post(const detail::task_type& task,
               const detail::task_type& completion_cb) {
       std::unique_lock<std::mutex> lock(m_);
-      post_no_lock(task, completion_cb);
-    }
-    
-    void post_no_lock(const detail::task_type& task,
-                      const detail::task_type& completion_cb) {
       if (task_)
         throw std::logic_error("Worker already has a pending task");
       start_task(task, completion_cb);
     }
-
 
   private:
     void start_task(const detail::task_type& task,
@@ -197,7 +179,6 @@ class async_thread_pool_executor {
 
   private:
     std::thread thread_;
-    std::thread::id id_;
     mutable std::mutex m_;
     bool need_stop_ = false;
     std::condition_variable start_cond_;
@@ -210,11 +191,43 @@ class async_thread_pool_executor {
 public:
   async_thread_pool_executor(size_t size)
     : tp_(size),
-      ready_threads_(size) {
-
+      ready_threads_(size),
+      need_stop_(false) {
+    manager_thread_ = std::thread([this] {
+      while (!need_stop_) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cond_.wait(lock, [this] {
+          return need_stop_ || (!task_queue_.empty() && ready_threads_); 
+        });
+        if (need_stop_)
+          return;
+        if (ready_threads_) {
+          auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
+          [](const worker_thread& worker) {
+              return worker.available();
+          });
+          if (ready_it == tp_.end())
+            throw std::logic_error("Can't find ready thread");
+          --ready_threads_;
+          auto task = task_queue_.front();
+          task_queue_.pop();
+          ready_it->post(task, [this] {
+            {
+              std::lock_guard<std::mutex> lock(mutex_);
+              ++ready_threads_;
+            }
+            cond_.notify_all();
+          });
+        }
+      }
+    });
   }
 
   ~async_thread_pool_executor() {
+    need_stop_ = true;
+    cond_.notify_all();
+    if (manager_thread_.joinable())
+      manager_thread_.join();
     for (auto& worker : tp_) {
       worker.stop();
     }
@@ -226,41 +239,11 @@ public:
   }
 
   void post(const detail::task_type& task) {
-    std::unique_lock<std::mutex> lock(mutex_);
-    try_post(task);
-  }
-
-private:
-  void start_thread(const detail::task_type& task, worker_thread& worker) {
-    --ready_threads_;
-    auto cb = [this] {
-      std::lock_guard<std::mutex> lock(mutex_);
-      ++ready_threads_;
-      if (!task_queue_.empty()) {
-        detail::task_type new_task = task_queue_.front();
-        task_queue_.pop();
-        try_post(new_task);
-      }
-    };
-    if (std::this_thread::get_id() != worker.get_id())
-      worker.post(task, cb);
-    else
-      worker.post_no_lock(task, cb);
-  }
-  
-  void try_post(const detail::task_type& task) {
-    auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
-    [](const worker_thread& worker) {
-      if (std::this_thread::get_id() != worker.get_id())
-        return worker.available();
-      else
-        return worker.available_no_lock();
-    });
-    if (ready_it != tp_.end()) {
-      start_thread(task, *ready_it);
-    } else {
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
       task_queue_.push(task);
     }
+    cond_.notify_all();
   }
 
 private:
@@ -268,6 +251,9 @@ private:
   size_t ready_threads_;
   mutable std::mutex mutex_;
   std::queue<detail::task_type> task_queue_;
+  std::thread manager_thread_;
+  bool need_stop_;
+  std::condition_variable cond_;
 };
 
 // This is the void type analogue. 
