@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 2.8)
 project("cf")
 if (MSVC)
   set(CMAKE_CXX_FLAGS "/EHsc")
 else()
-  set(CMAKE_CXX_FLAGS "-std=c++14 -pedantic")
+  set(CMAKE_CXX_FLAGS "-std=c++14 -pedantic -stdlib=libc++")
+  find_package (Threads)
 endif()
 
 set(INCLUDES "${CMAKE_SOURCE_DIR}")
