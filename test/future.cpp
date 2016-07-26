@@ -285,6 +285,7 @@ TEST_CASE("Executors") {
       executor.post([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
       });
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
       REQUIRE(executor.available() == 0);
       std::this_thread::sleep_for(std::chrono::milliseconds(105));
       REQUIRE(executor.available() == 1);
@@ -305,6 +306,7 @@ TEST_CASE("Executors") {
       executor.post([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
       });
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
       REQUIRE(executor.available() == 0);
       executor.post([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
