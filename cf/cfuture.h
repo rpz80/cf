@@ -174,7 +174,7 @@ class async_thread_pool_executor {
                     const detail::task_type& completion_cb) {
       task_ = task;
       completion_cb_ = completion_cb;
-      start_cond_.notify_all();
+      start_cond_.notify_one();
     }
 
   private:
@@ -198,19 +198,21 @@ public:
         cond_.wait(lock, [this] {
           return need_stop_ || !task_queue_.empty(); 
         });
-        if (need_stop_)
-          return;
-        auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
-        [](const worker_thread& worker) {
-            return worker.available();
-        });
-        if (ready_it == tp_.end())
-          continue;
-        auto task = task_queue_.front();
-        task_queue_.pop();
-        ready_it->post(task, [this] {
-          cond_.notify_all();
-        });
+        while (!task_queue_.empty()) {
+          if (need_stop_)
+            return;
+          auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
+          [](const worker_thread& worker) {
+              return worker.available();
+          });
+          if (ready_it == tp_.end())
+            break;
+          auto task = task_queue_.front();
+          task_queue_.pop();
+          ready_it->post(task, [this] {
+            cond_.notify_one();
+          });
+        }
       }
     });
   }
@@ -237,7 +239,7 @@ public:
       std::unique_lock<std::mutex> lock(mutex_);
       task_queue_.push(task);
     }
-    cond_.notify_all();
+    cond_.notify_one();
   }
 
 private:
