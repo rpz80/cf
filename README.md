@@ -8,7 +8,7 @@ The most significant Cf difference from standard futures is the Executor concept
 |------------|:--------------------------------:|:---:|----------|
 |[future](http://en.cppreference.com/w/cpp/experimental/future)|Yes|Yes|No share() member function. No void (use cf::unit instead) and T& specializations.|
 |[promise](http://en.cppreference.com/w/cpp/thread/promise)|Yes|Yes|No set_\*\*_at_thread_exit member functions. No void ans T& specializations.|
-|[async](http://en.cppreference.com/w/cpp/thread/async)|Yes|Yes|No launch policy|
+|[async](http://en.cppreference.com/w/cpp/thread/async)|Yes|Yes|No launch policy.|
 |[packaged_task](http://en.cppreference.com/w/cpp/thread/packaged_task)|Yes|No||
 |[shared_future](http://en.cppreference.com/w/cpp/thread/shared_future)|Yes|No||
 |[when_all](http://en.cppreference.com/w/cpp/experimental/when_all)|Yes|Yes||
