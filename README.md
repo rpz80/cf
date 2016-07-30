@@ -6,7 +6,7 @@ Cf library consists of just one header with no dependencies except of c++14 comp
 The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
 Cf comes with three executors shipped. They are: 
 * `cf::sync_executor` - executes callable in place. This is just for the generic code convinience.
-* `cf::async_queued_executor` - non blocking async queued executor. May be used as a base of an event loop.
+* `cf::async_queued_executor` - non blocking async queued executor.
 * `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker thread.
 
 ## Cf current state
@@ -26,6 +26,7 @@ Cf comes with three executors shipped. They are:
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
 ### Async && Then
 ```c++
+// Async + then + then via executor
 cf::async_queued_executor executor;
 auto f = cf::async([] {
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is executed on the separate standalone thread
@@ -39,4 +40,12 @@ auto f = cf::async([] {
 }, executor);
 
 assert(f.get() == "Hello futures world!");
+```
+```c++
+// Async itself may be called with executor
+cf::sync_executor executor;
+cf::async(executor, [] {
+  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is evaluated in place
+  return std::string("Hello ")
+}).get();
 ```
