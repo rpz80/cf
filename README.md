@@ -1,13 +1,14 @@
-# Composabe C++ futures (Cf) library
-This is an implementation of composable, continuing c++17 like [futures](http://en.cppreference.com/w/cpp/experimental/future). I'm done with the most useful/interesting parts as I personally see it. Some other, currently not implemented features will come soon I hope, while the rest (like void future/promise specializations) are not likely to ever emerge to life.
+# Composable futures C++ library (Cf)
+This is an implementation of composable, continuing c++17 like [futures](http://en.cppreference.com/w/cpp/experimental/concurrency#Continuations and other extensions for std::future). The most useful/interesting parts, as I personally see them, are ready. Some other, currently not implemented features, will come soon I hope, while the rest (like void future/promise specializations, launch policies) are not likely to ever emerge.
 
-Cf library consists of just one header with no dependencies except of c++14 compliant standard library.
+Cf library consists of just one header with no dependencies except c++14 compliant standard library. Cf library comes with constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
 
+## Executors
 The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
 Cf comes with three executors shipped. They are: 
 * `cf::sync_executor` - executes callable in place. This is just for the generic code convinience.
 * `cf::async_queued_executor` - non blocking async queued executor.
-* `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker thread.
+* `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker threads.
 
 ## Cf current state
 |Feature name|Standard library (including c++17)|CF   |Compliance|
@@ -25,12 +26,12 @@ Cf comes with three executors shipped. They are:
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
 ### Async && Then
-```c++
 // Async + then + then via executor
+```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is executed on the separate standalone thread
-  return std::string("Hello ");                               // Result, when it's ready, is stored in cf::future<std::string>
+  return std::string("Hello ");                               // Result, when it's ready, is stored in cf::future<std::string>.
 }).then([] (cf::future<std::string> f) {                      // Which in turn is passed to the continuation.
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // The continuation may be executed on different contexts.
   return f.get() + "futures ";                                // This time - on the same thread as async.
@@ -41,11 +42,12 @@ auto f = cf::async([] {
 
 assert(f.get() == "Hello futures world!");
 ```
+Async itself may be called with the executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, in place) may easily be implemented as an executor. For example:
+
 ```c++
-// Async itself may be called with executor
 cf::sync_executor executor;
 cf::async(executor, [] {
-  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is evaluated in place
-  return std::string("Hello ")
+  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is evaluated in place, in this case exactly like 
+  return std::string("Hello ")                                // std::async with the std::launch::deferred policy.
 }).get();
 ```
