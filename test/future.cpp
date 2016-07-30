@@ -188,7 +188,7 @@ TEST_CASE("async") {
   }
   
   SECTION("tp executor") {
-    cf::async_thread_pool_executor executor(2);
+    cf::async_thread_pool_executor executor(1);
     auto f = cf::async(executor, [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return std::string("Hello");

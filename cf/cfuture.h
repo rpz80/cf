@@ -806,15 +806,17 @@ future<U> make_exceptional_future(std::exception_ptr p) {
   return future<U>(state);
 }
 
-// TODO: async with executor
 template<typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
+  
   promise<future_inner_type> p;
   auto result = p.get_future();
+  
   std::thread([p = std::move(p), f = std::forward<F>(f), args...] () mutable {
     p.set_value(std::forward<F>(f)(args...));
   }).detach();
+  
   return result;
 }
 
@@ -831,11 +833,14 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
   return result;
 }
 
+// TODO: Check when_all implementation (remove tmp_result? anything else?)
+
 template<typename InputIt>
 auto when_all(InputIt first, InputIt last)
 -> future<std::vector<typename std::iterator_traits<InputIt>::value_type>> {
   using result_inner_type = 
     std::vector<typename std::iterator_traits<InputIt>::value_type>;
+  
   struct context {
     size_t total_futures = 0;
     size_t ready_futures = 0;
@@ -844,12 +849,14 @@ auto when_all(InputIt first, InputIt last)
     std::mutex mutex;
     promise<result_inner_type> p;
   };
+  
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
   shared_context->result.resize(shared_context->total_futures);
   shared_context->temp_result.reserve(shared_context->total_futures);
   size_t index = 0;
+  
   for (; first != last; ++first, ++index) {
     shared_context->temp_result.push_back(std::move(*first));
     shared_context->temp_result[index].then(
@@ -865,6 +872,7 @@ auto when_all(InputIt first, InputIt last)
       return unit();
     });
   }
+  
   return result_future;
 }
 
