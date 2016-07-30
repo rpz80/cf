@@ -25,12 +25,12 @@ Cf comes with three executors shipped. They are:
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
 ### Async && Then
-```c++
 // Async + then + then via executor
+```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is executed on the separate standalone thread
-  return std::string("Hello ");                               // Result, when it's ready, is stored in cf::future<std::string>
+  return std::string("Hello ");                               // Result, when it's ready, is stored in cf::future<std::string>.
 }).then([] (cf::future<std::string> f) {                      // Which in turn is passed to the continuation.
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // The continuation may be executed on different contexts.
   return f.get() + "futures ";                                // This time - on the same thread as async.
@@ -41,11 +41,12 @@ auto f = cf::async([] {
 
 assert(f.get() == "Hello futures world!");
 ```
+Async itself may be called with the executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, in place) may easily be implemented as an executor. For example:
+
 ```c++
-// Async itself may be called with executor
 cf::sync_executor executor;
 cf::async(executor, [] {
-  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is evaluated in place
-  return std::string("Hello ")
+  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is evaluated in place, in this case exactly like 
+  return std::string("Hello ")                                // std::async with the std::launch::deferred policy.
 }).get();
 ```
