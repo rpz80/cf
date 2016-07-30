@@ -175,7 +175,41 @@ TEST_CASE("Future") {
   }
 }
 
+// TODO: more exeception tests
+
 TEST_CASE("async") {
+  SECTION("in a row") {
+    cf::async_queued_executor executor;
+    auto f = cf::async([] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      return std::string("Hello ");
+    }).then([] (cf::future<std::string> f) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      return f.get() + "futures ";
+    }).then([] (cf::future<std::string> f) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      return f.get() + "world!";
+    }, executor);
+    REQUIRE(!f.is_ready());
+    REQUIRE(f.get() == "Hello futures world!");
+  }
+  
+  SECTION("async simple with args") {
+    auto f = cf::async([](int i) { 
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      return i; 
+    }, 42);
+    REQUIRE(f.get() == 42);
+  }
+
+  SECTION("async simple without args") {
+    auto f = cf::async([]() { 
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      return 42; 
+    });
+    REQUIRE(f.get() == 42);
+  }
+  
   SECTION("simple") {
     auto f = cf::async([] {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -277,24 +311,6 @@ TEST_CASE("Then test") {
         return (char)f.get();
       }, sync_executor);
     REQUIRE(result.get() == 42);
-  }
-}
-
-TEST_CASE("Async") {
-  SECTION("async simple with args") {
-    auto f = cf::async([](int i) { 
-      std::this_thread::sleep_for(std::chrono::milliseconds(300));
-      return i; 
-    }, 42);
-    REQUIRE(f.get() == 42);
-  }
-
-  SECTION("async simple without args") {
-    auto f = cf::async([]() { 
-      std::this_thread::sleep_for(std::chrono::milliseconds(300));
-      return 42; 
-    });
-    REQUIRE(f.get() == 42);
   }
 }
 
