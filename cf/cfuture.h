@@ -466,7 +466,7 @@ template<typename T, typename F>
 using then_ret_type = std::conditional_t<
   is_future<then_arg_ret_type<T, F>>::value,  // if f returns future<U>
   then_arg_ret_type<T, F>,                    // then leave type untouched
-  future<then_arg_ret_type<T, F>> >;           // else lift it into the future type
+  future<then_arg_ret_type<T, F>> >;          // else lift it into the future type
 
 template<typename T>
 struct future_held_type;
@@ -593,6 +593,8 @@ private:
 
 template<>
 class future<void>;
+
+// TODO: then(f, executor) --> then(executor, f)
 
 template<typename T>
 template<typename F>
