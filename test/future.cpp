@@ -198,6 +198,29 @@ TEST_CASE("async") {
     REQUIRE(f.is_ready());
     REQUIRE(f.get() == "Hello");
   }
+  
+  SECTION("tp executor 2") {
+    cf::async_thread_pool_executor executor(2);
+    std::vector<cf::future<std::string>> v;
+    
+    for (size_t i = 0; i < 10; ++i) {
+      v.emplace_back(cf::async(executor, [i] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return std::string("Hello") + std::to_string(i);
+      }));
+    }
+    
+    for (size_t i = 0; i < 10; ++i) {
+      REQUIRE(!v[i].is_ready());
+    }
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    
+    for (size_t i = 0; i < 10; ++i) {
+      REQUIRE(v[i].is_ready());
+      REQUIRE(v[i].get() == std::string("Hello") + std::to_string(i));
+    }
+  }
 }
 
 TEST_CASE("Make future functions") {
@@ -414,6 +437,8 @@ TEST_CASE("When any") {
       auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
       REQUIRE(when_any_result.sequence.size() == size);
       REQUIRE(when_any_result.index == 4);
+      REQUIRE(when_any_result.sequence[4].is_ready());
+      REQUIRE(when_any_result.sequence[4].get() == 4);
     }
 
     SECTION("Ready futures") {
@@ -424,6 +449,8 @@ TEST_CASE("When any") {
       auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
       REQUIRE(when_any_result.sequence.size() == size);
       REQUIRE(when_any_result.index == 0);
+      REQUIRE(when_any_result.sequence[0].is_ready());
+      REQUIRE(when_any_result.sequence[0].get() == 0);
     }
   }
   

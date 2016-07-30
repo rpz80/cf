@@ -957,6 +957,7 @@ auto when_any(InputIt first, InputIt last)
         if (!shared_context->ready) {
           shared_context->result.index = index;
           shared_context->ready = true;
+          shared_context->result.sequence[index] = std::move(f);
           if (shared_context->processed == shared_context->total &&
               !shared_context->result_moved) {
             shared_context->p.set_value(std::move(shared_context->result));
