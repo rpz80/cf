@@ -175,10 +175,33 @@ TEST_CASE("Future") {
   }
 }
 
-TEST_CASE("Make future functions")
-{
-  SECTION("Make ready")
-  {
+TEST_CASE("async") {
+  SECTION("simple") {
+    auto f = cf::async([] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      return std::string("Hello");
+    });
+    REQUIRE(!f.is_ready());
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    REQUIRE(f.is_ready());
+    REQUIRE(f.get() == "Hello");
+  }
+  
+  SECTION("tp executor") {
+    cf::async_thread_pool_executor executor(2);
+    auto f = cf::async(executor, [] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      return std::string("Hello");
+    });
+    REQUIRE(!f.is_ready());
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    REQUIRE(f.is_ready());
+    REQUIRE(f.get() == "Hello");
+  }
+}
+
+TEST_CASE("Make future functions") {
+  SECTION("Make ready") {
     cf::future<int> f = cf::make_ready_future(42);
     REQUIRE(f.is_ready());
     REQUIRE(f.valid());
@@ -200,7 +223,6 @@ cf::future<double> tfoo(cf::future<int> f) {
 }
 
 TEST_CASE("Then test") {
-  // TODO: f = f.then() test
   SECTION("Continuation returns future") {
     auto cont = [](cf::future<double> f) -> cf::future<char> {
       return cf::make_ready_future<char>(f.get());
@@ -377,35 +399,37 @@ TEST_CASE("When all") {
 }
 
 TEST_CASE("When any") {
-//  SECTION("Simple vector") {
-//    const size_t size = 5;
-//    std::vector<cf::future<int>> vec;
-//
-//    SECTION("Async")    {
-//      for (size_t i = 0; i < size; ++i) {
-//        vec.push_back(cf::async([i, size] {
-//          std::this_thread::sleep_for(std::chrono::milliseconds((size - i) * 30));
-//          return (int)i;
-//        }));
-//      }
-//      
-//      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
-//      REQUIRE(when_any_result.sequence.size() == size);
-//      REQUIRE(when_any_result.index == 4);
-//    }
-//
-//    SECTION("Ready futures") {
-//      for (size_t i = 0; i < size; ++i) {
-//        vec.push_back(cf::make_ready_future((int)i));
-//      }
-//      
-//      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
-//      REQUIRE(when_any_result.sequence.size() == size);
-//      REQUIRE(when_any_result.index == 0);
-//    }
-//  }
+  SECTION("Simple vector") {
+    const size_t size = 5;
+    std::vector<cf::future<int>> vec;
 
-  SECTION("Simple tuple") {
+    SECTION("Async")    {
+      for (size_t i = 0; i < size; ++i) {
+        vec.push_back(cf::async([i, size] {
+          std::this_thread::sleep_for(std::chrono::milliseconds((size - i) * 30));
+          return (int)i;
+        }));
+      }
+      
+      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
+      REQUIRE(when_any_result.sequence.size() == size);
+      REQUIRE(when_any_result.index == 4);
+    }
+
+    SECTION("Ready futures") {
+      for (size_t i = 0; i < size; ++i) {
+        vec.push_back(cf::make_ready_future((int)i));
+      }
+      
+      auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
+      REQUIRE(when_any_result.sequence.size() == size);
+      REQUIRE(when_any_result.index == 0);
+    }
+  }
+  
+  // TODO: runtime tuple by index getter && test
+
+  SECTION("tuple async") {
     auto when_any_result = cf::when_any(
       cf::async([] { 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -418,6 +442,17 @@ TEST_CASE("When any") {
     
     REQUIRE(when_any_result.index == 1);
     REQUIRE(std::get<1>(when_any_result.sequence).get() == cf::unit());
+  }
+  
+  SECTION("tuple ready") {
+    auto when_any_result = cf::when_any(cf::make_ready_future(42),
+      cf::async([] { 
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return cf::unit(); 
+      })).get();
+    
+    REQUIRE(when_any_result.index == 0);
+    REQUIRE(std::get<0>(when_any_result.sequence).get() == 42);
   }
 
   SECTION("When w executors") {
