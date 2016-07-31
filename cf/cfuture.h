@@ -816,7 +816,11 @@ future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   auto result = p.get_future();
   
   std::thread([p = std::move(p), f = std::forward<F>(f), args...] () mutable {
-    p.set_value(std::forward<F>(f)(args...));
+    try {
+      p.set_value(std::forward<F>(f)(args...));
+    } catch (...) {
+      p.set_exception(std::current_exception());
+    }
   }).detach();
   
   return result;
@@ -829,7 +833,11 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
   auto promise_ptr = std::make_shared<promise<future_inner_type>>();
   auto result = promise_ptr->get_future();
   executor.post([promise_ptr, f = std::forward<F>(f), args...] () mutable {
-    promise_ptr->set_value(std::forward<F>(f)(args...));
+    try {
+      promise_ptr->set_value(std::forward<F>(f)(args...));
+    } catch (...) {
+      promise_ptr->set_exception(std::current_exception());
+    }
   });
   
   return result;
