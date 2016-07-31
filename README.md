@@ -71,3 +71,4 @@ std::is_same<
     });}))
 >::value == true;
 ```
+when_any
