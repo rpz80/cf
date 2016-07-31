@@ -1,7 +1,7 @@
 # Composable futures C++ library (Cf)
 This is an implementation of composable, continuing c++17 like [futures](http://en.cppreference.com/w/cpp/experimental/concurrency#Continuations and other extensions for std::future). The most useful/interesting parts, as I personally see them, are ready. Some other, currently not implemented features, will come soon I hope, while the rest (like void future/promise specializations, launch policies) are not likely to ever emerge.
 
-Cf library consists of just one header with no dependencies except c++14 compliant standard library. Cf library comes with constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
+Cf library consists of just one header with no dependencies except c++14 compliant standard library. Cf library comes with a constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
 
 ## Executors
 The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
@@ -30,7 +30,7 @@ Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
-  http_response resp = http_request req("my-site.com");
+  http_response resp = http_request("my-site.com");
   resp.read_headers();                     // This is executed on the separate standalone thread
   return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
 }).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
@@ -62,10 +62,10 @@ You can return futures from continuations or 'plain' values. The latter will be 
 ```c++
 auto f = cd::make_ready_future(42);
 std::is_same<
-  decltype(f.then([](cf::future<int> f) {
+  decltype(f.then([](cf::future<int> f) { // then() return type = cf::future<int>
     return f.get() * 2;
   })), 
-  decltype(f.then([](cf::future<int> f) {
+  decltype(f.then([](cf::future<int> f) { // same here (not cf::future<cf::future<int>>)
     return cf::async([f = std::move(f)] { 
       return f.get() * 2; 
     });}))
