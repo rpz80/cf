@@ -65,7 +65,7 @@ std::is_same<
   decltype(f.then([](cf::future<int> f) { // then() return type = cf::future<int>
     return f.get() * 2;
   })), 
-  decltype(f.then([](cf::future<int> f) { // same here
+  decltype(f.then([](cf::future<int> f) { // same here (not cf::future<cf::future<int>>)
     return cf::async([f = std::move(f)] { 
       return f.get() * 2; 
     });}))
