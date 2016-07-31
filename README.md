@@ -35,10 +35,10 @@ auto f = cf::async([] {
 }).then([] (cf::future<std::string> f) {                      // Which in turn is passed to the continuation.
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // The continuation may be executed on different contexts.
   return f.get() + "futures ";                                // This time - on the same thread as async.
-}).then([] (cf::future<std::string> f) {
+}).then(executor, [] (cf::future<std::string> f) {
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // And this time on the async_queued_executor context.
   return f.get() + "world!";
-}, executor);
+});
 
 assert(f.get() == "Hello futures world!");
 ```
