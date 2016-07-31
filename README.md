@@ -30,7 +30,7 @@ Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
-  http_response resp = http_request req("my-site.com");
+  http_response resp = http_request("my-site.com");
   resp.read_headers();                     // This is executed on the separate standalone thread
   return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
 }).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
