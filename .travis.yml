@@ -12,7 +12,7 @@ matrix:
             - llvm-toolchain-precise-3.8
           packages:
             - clang-3.8
-            - ^libc\+\+-dev$
+            - libc++-dev
       before_install:
         - sudo apt-get update -qq
 
@@ -32,7 +32,7 @@ matrix:
             - llvm-toolchain-precise-3.7
           packages:
             - clang-3.7
-            - ^libc\+\+-dev$
+            - libc++-dev
       before_install:
         - sudo apt-get update -qq
 
