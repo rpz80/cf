@@ -887,8 +887,8 @@ auto when_all(InputIt first, InputIt last)
 namespace detail {
 template<size_t I, typename Context, typename Future>
 void when_inner_helper(Context context, Future&& f) {
-  std::get<I>(context->temp_result) = std::move(f);
-  std::get<I>(context->temp_result).then([context](Future f) {
+  std::get<I>(context->result) = std::move(f);
+  std::get<I>(context->result).then([context](Future f) {
     std::lock_guard<std::mutex> lock(context->mutex);
     ++context->ready_futures;
     std::get<I>(context->result) = std::move(f);
@@ -916,7 +916,6 @@ auto when_all(Futures&&... futures)
     size_t total_futures;
     size_t ready_futures = 0;
     result_inner_type result;
-    result_inner_type temp_result;
     promise<result_inner_type> p;
     std::mutex mutex;
   };

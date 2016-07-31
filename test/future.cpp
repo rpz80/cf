@@ -505,21 +505,21 @@ TEST_CASE("When any") {
     auto when_any_result = cf::when_any(
       cf::make_ready_future<std::string>("Hello ").then(queue_executor,
         [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "composable ";
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "futures!";
         }),
       cf::make_ready_future<std::string>("Hello ").then(queue_executor,
         [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "composable ";
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "futures ";
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "world!";
         })).get();
     
