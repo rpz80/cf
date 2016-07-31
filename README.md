@@ -14,7 +14,7 @@ Cf comes with three executors shipped. They are:
 |Feature name|Standard library (including c++17)|CF   |Compliance|
 |------------|:--------------------------------:|:---:|----------|
 |[future](http://en.cppreference.com/w/cpp/experimental/future)|Yes|Yes|No share() member function. No void (use cf::unit instead) and T& specializations.|
-|[promise](http://en.cppreference.com/w/cpp/thread/promise)|Yes|Yes|No set_\*\*_at_thread_exit member functions. No void ans T& specializations.|
+|[promise](http://en.cppreference.com/w/cpp/thread/promise)|Yes|Yes|No set_\*\*_at_thread_exit member functions. No void and T& specializations.|
 |[async](http://en.cppreference.com/w/cpp/thread/async)|Yes|Yes|No launch policy.|
 |[packaged_task](http://en.cppreference.com/w/cpp/thread/packaged_task)|Yes|No||
 |[shared_future](http://en.cppreference.com/w/cpp/thread/shared_future)|Yes|No||
@@ -26,7 +26,7 @@ Cf comes with three executors shipped. They are:
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
 ### Async && Then
-// Async + then + then via executor
+Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
