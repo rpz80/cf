@@ -62,10 +62,10 @@ You can return futures from continuations or 'plain' values. The latter will be 
 ```c++
 auto f = cd::make_ready_future(42);
 std::is_same<
-  decltype(f.then([](cf::future<int> f) {
+  decltype(f.then([](cf::future<int> f) { // then() return type = cf::future<int>
     return f.get() * 2;
   })), 
-  decltype(f.then([](cf::future<int> f) {
+  decltype(f.then([](cf::future<int> f) { // same here
     return cf::async([f = std::move(f)] { 
       return f.get() * 2; 
     });}))
