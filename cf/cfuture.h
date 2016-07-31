@@ -292,7 +292,7 @@ std::string errc_string(errc value) {
 struct future_error : public std::exception {
   future_error(errc ecode, const std::string& s)
     : ecode_(ecode),
-    error_string_(s) {}
+      error_string_(s) {}
 
   virtual const char* what() const noexcept override {
     return error_string_.data();
@@ -516,7 +516,7 @@ public:
   detail::then_ret_type<T, F> then(F&& f);
 
   template<typename F, typename Executor>
-  detail::then_ret_type<T, F> then(F&& f, Executor& executor);
+  detail::then_ret_type<T, F> then(Executor& executor, F&& f);
 
   bool is_ready() const {
     check_state(state_);
@@ -605,7 +605,7 @@ detail::then_ret_type<T, F> future<T>::then(F&& f) {
 
 template<typename T>
 template<typename F, typename Executor>
-detail::then_ret_type<T, F> future<T>::then(F&& f, Executor& executor) {
+detail::then_ret_type<T, F> future<T>::then(Executor& executor, F&& f) {
   check_state(state_);
   return then_impl<F>(std::forward<F>(f), executor);
 }

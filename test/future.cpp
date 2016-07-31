@@ -142,10 +142,10 @@ TEST_CASE("Future") {
     auto f = cf::async([]{
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return 5;
-    }).then([](cf::future<int> f) {
+    }).then(executor, [](cf::future<int> f) {
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
       return f.get() * 5;
-    }, executor).then([](cf::future<int> f) {
+    }).then([](cf::future<int> f) {
       return cf::async([f = std::move(f)]() mutable {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         return f.get() * 5;
@@ -183,13 +183,13 @@ TEST_CASE("async") {
     auto f = cf::async([] {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return std::string("Hello ");
-    }).then([] (cf::future<std::string> f) {
+    }).then(executor, [] (cf::future<std::string> f) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return f.get() + "futures ";
     }).then([] (cf::future<std::string> f) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return f.get() + "world!";
-    }, executor);
+    });
     REQUIRE(!f.is_ready());
     REQUIRE(f.get() == "Hello futures world!");
   }
@@ -305,11 +305,11 @@ TEST_CASE("Then test") {
   SECTION("Continuation returns non future executor") {
     cf::sync_executor sync_executor;
     auto result = cf::make_ready_future<int>(42)
-      .then([](cf::future<int> f) {
+      .then(sync_executor, [](cf::future<int> f) {
         return (double)f.get();
-      }, sync_executor).then([](cf::future<double> f) {
+      }).then(sync_executor, [](cf::future<double> f) {
         return (char)f.get();
-      }, sync_executor);
+      });
     REQUIRE(result.get() == 42);
   }
 }
@@ -323,14 +323,14 @@ TEST_CASE("Executors") {
     auto result = cf::async([&counter] {
       ++counter;
       return 42;
-    }).then([&counter](cf::future<int> f) {
+    }).then(executor, [&counter](cf::future<int> f) {
       ++counter;
       f.get();
       return std::string("Hello");
-    }, executor).then([&counter](cf::future<std::string> f) {
+    }).then(executor, [&counter](cf::future<std::string> f) {
       ++counter;
       return f.get() + " world!";
-    }, executor);
+    });
     
     REQUIRE(result.get() == "Hello world!");
     REQUIRE(counter == 3);
@@ -388,12 +388,12 @@ TEST_CASE("Executors") {
       cf::future<int> f = cf::make_ready_future(0);
       
       for (size_t i = 0; i < 10; ++i) {
-        f = f.then([i](cf::future<int> f) {
+        f = f.then(executor, [i](cf::future<int> f) {
           std::this_thread::sleep_for(std::chrono::milliseconds(5 * (i + 3)));
           int val = f.get();
           REQUIRE(val == i);
           return ++val;
-        }, executor);
+        });
       }
       
       REQUIRE(f.get() == 10);
@@ -503,25 +503,25 @@ TEST_CASE("When any") {
     cf::async_thread_pool_executor tp_executor(1);
     
     auto when_any_result = cf::when_any(
-      cf::make_ready_future<std::string>("Hello ").then(
+      cf::make_ready_future<std::string>("Hello ").then(queue_executor,
         [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           return f.get() + "composable ";
-        }, queue_executor).then([] (cf::future<std::string> f) mutable {
+        }).then(tp_executor, [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           return f.get() + "futures!";
-        }, tp_executor),
-      cf::make_ready_future<std::string>("Hello ").then(
+        }),
+      cf::make_ready_future<std::string>("Hello ").then(queue_executor,
         [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           return f.get() + "composable ";
-        }, queue_executor).then([] (cf::future<std::string> f) mutable {
+        }).then(tp_executor, [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           return f.get() + "futures ";
-        }, tp_executor).then([] (cf::future<std::string> f) mutable {
+        }).then(tp_executor, [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           return f.get() + "world!";
-        }, tp_executor)).get();
+        })).get();
     
     REQUIRE(std::get<1>(when_any_result.sequence).is_ready() == false);
     
