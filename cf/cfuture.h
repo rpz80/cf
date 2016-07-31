@@ -855,7 +855,6 @@ auto when_all(InputIt first, InputIt last)
     size_t total_futures = 0;
     size_t ready_futures = 0;
     result_inner_type result;
-    result_inner_type temp_result;
     std::mutex mutex;
     promise<result_inner_type> p;
   };
@@ -863,13 +862,12 @@ auto when_all(InputIt first, InputIt last)
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
-  shared_context->result.resize(shared_context->total_futures);
-  shared_context->temp_result.reserve(shared_context->total_futures);
+  shared_context->result.reserve(shared_context->total_futures);
   size_t index = 0;
   
   for (; first != last; ++first, ++index) {
-    shared_context->temp_result.push_back(std::move(*first));
-    shared_context->temp_result[index].then(
+    shared_context->result.push_back(std::move(*first));
+    shared_context->result[index].then(
     [shared_context, index] 
     (typename std::iterator_traits<InputIt>::value_type f) mutable {
       {
