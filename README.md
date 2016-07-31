@@ -25,22 +25,28 @@ Cf comes with three executors shipped. They are:
 
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
-### Async && Then
+
 Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
-  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is executed on the separate standalone thread
-  return std::string("Hello ");                               // Result, when it's ready, is stored in cf::future<std::string>.
-}).then([] (cf::future<std::string> f) {                      // Which in turn is passed to the continuation.
-  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // The continuation may be executed on different contexts.
-  return f.get() + "futures ";                                // This time - on the same thread as async.
-}).then(executor, [] (cf::future<std::string> f) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(10)); // And this time on the async_queued_executor context.
-  return f.get() + "world!";
+  http_response resp = http_request req("my-site.com");
+  resp.read_headers();                     // This is executed on the separate standalone thread
+  return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
+}).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
+  auto resp = f.get();
+  if (resp.code() == http::Ok)             // The continuation may be executed on different contexts.
+    resp.read_body();                      // This time - on the async thread.
+  return resp;                             
+}).then(executor, [] (cf::future<http_response> f) {
+  auto resp = f.get();                     // And this time on the async_queued_executor context.
+  process(resp.body());
+  return cf::unit();                       // When you don't need result - use cf::unit.
+}).then([] (cf::future<cf::unit>) {
+  log() << "body processed" << std::endl;
 });
 
-assert(f.get() == "Hello futures world!");
+f.wait();
 ```
 Async itself may be called with the executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, in place) may easily be implemented as an executor. For example:
 
@@ -50,4 +56,18 @@ cf::async(executor, [] {
   std::this_thread::sleep_for(std::chrono::milliseconds(10)); // This is evaluated in place, in this case exactly like 
   return std::string("Hello ")                                // std::async with the std::launch::deferred policy.
 }).get();
+```
+You can return futures from continuations or 'plain' values. The latter will be lifted in the future by Cf implicitely. I.e.
+
+```c++
+auto f = cd::make_ready_future(42);
+std::is_same<
+  decltype(f.then([](cf::future<int> f) {
+    return f.get() * 2;
+  })), 
+  decltype(f.then([](cf::future<int> f) {
+    return cf::async([f = std::move(f)] { 
+      return f.get() * 2; 
+    });}))
+>::value == true;
 ```
