@@ -4,39 +4,7 @@ language: cpp
 
 matrix:
   include:
-    - compiler: gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-4.9
-      env: 
-            - CXX=g++-4.9
-            - CC=gcc-4.9
-    - compiler: gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-5
-      env: 
-            - CXX=g++-5
-            - CC=gcc-5
-    - compiler: clang-3.7
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-            - llvm-toolchain-precise-3.7
-          packages:
-            - clang-3.7
-            - libc++-dev
-      env: 
-            - CXX=clang++-3.7
-            - CC=clang-3.7
-    - compiler: clang-3.8
+    - compiler: clang
       addons:
         apt:
           sources:
@@ -45,9 +13,10 @@ matrix:
           packages:
             - clang-3.8
             - libc++-dev
-      env: 
-            - CXX=clang++-3.8
-            - CC=clang-3.8
+      after_install:
+        env:
+          - CXX=clang++3.8
+          - CC=clang-3.8
 
 before_install:
   - sudo apt-get update -qq
