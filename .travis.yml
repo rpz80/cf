@@ -28,7 +28,7 @@ matrix:
             - llvm-toolchain-precise-3.7
           packages:
             - clang-3.7
-            - libc++
+            - libc++-dev
       env: COMPILER=clang++-3.7
     - compiler: clang
       addons:
@@ -38,7 +38,7 @@ matrix:
             - llvm-toolchain-precise-3.8
           packages:
             - clang-3.8
-            - libc++
+            - libc++-dev
       env: 
         - COMPILER=clang++-3.8
 
@@ -50,5 +50,5 @@ script:
   - cd build
   - cmake -DCMAKE_CXX_COMPILER=$COMPILER .. && make
   - make
-  - ./cf_test
+  - bin/cf_test
 
