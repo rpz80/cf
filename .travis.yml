@@ -13,18 +13,33 @@ matrix:
           packages:
             - clang-3.8
             - libc++-dev
-
       before_install:
         - sudo apt-get update -qq
-
 
       script:
         - mkdir build
         - cd build
-        env:
-          - CXX=clang++3.8
-          - CC=clang-3.8
-        - cmake .. 
-        - make
+        - export CXX=clang++3.8
+        - export CC=clang-3.8
+        - cmake .. && make
         - bin/cf_test
 
+    - compiler: clang
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-precise-3.7
+          packages:
+            - clang-3.7
+            - libc++-dev
+      before_install:
+        - sudo apt-get update -qq
+
+      script:
+        - mkdir build
+        - cd build
+        - export CXX=clang++3.7
+        - export CC=clang-3.7
+        - cmake .. && make
+        - bin/cf_test
