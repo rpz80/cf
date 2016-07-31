@@ -1,7 +1,7 @@
 # Composable futures C++ library (Cf)
 This is an implementation of composable, continuing c++17 like [futures](http://en.cppreference.com/w/cpp/experimental/concurrency#Continuations and other extensions for std::future). The most useful/interesting parts, as I personally see them, are ready. Some other, currently not implemented features, will come soon I hope, while the rest (like void future/promise specializations, launch policies) are not likely to ever emerge.
 
-Cf library consists of just one header with no dependencies except c++14 compliant standard library. Cf library comes with constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
+Cf library consists of just one header with no dependencies except c++14 compliant standard library. Cf library comes with a constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
 
 ## Executors
 The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
