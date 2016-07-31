@@ -442,7 +442,7 @@ TEST_CASE("When any") {
     const size_t size = 5;
     std::vector<cf::future<int>> vec;
 
-    SECTION("Async")    {
+    SECTION("Async") {
       for (size_t i = 0; i < size; ++i) {
         vec.push_back(cf::async([i, size] {
           std::this_thread::sleep_for(std::chrono::milliseconds((size - i) * 30));
