@@ -19,7 +19,7 @@ matrix:
       script:
         - mkdir build
         - cd build
-        - export CXX=clang++3.8
+        - export CXX=clang++-3.8
         - export CC=clang-3.8
         - cmake .. && make
         - bin/cf_test
@@ -39,7 +39,7 @@ matrix:
       script:
         - mkdir build
         - cd build
-        - export CXX=clang++3.7
+        - export CXX=clang++-3.7
         - export CC=clang-3.7
         - cmake .. && make
         - bin/cf_test
