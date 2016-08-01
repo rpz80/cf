@@ -524,8 +524,6 @@ TEST_CASE("When any") {
     }
   }
   
-  // TODO: runtime tuple by index getter && test
-
   SECTION("tuple async") {
     auto when_any_result = cf::when_any(
       cf::async([] { 
