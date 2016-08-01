@@ -547,7 +547,7 @@ TEST_CASE("When any") {
           std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "futures ";
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(25));
+          std::this_thread::sleep_for(std::chrono::milliseconds(75));
           return f.get() + "world!";
         }));
     
