@@ -401,6 +401,18 @@ TEST_CASE("Executors") {
   }
 }
 
+template<size_t I>
+struct tuple_getter {
+  template<typename... Args>
+  static auto apply(size_t i, std::tuple<Args...>& t) {
+    if (i == I) {
+      return std::get<I>(t);
+    } else {
+      return tuple_getter<I+1>::apply(i, t);
+    }
+  }
+};
+
 TEST_CASE("When all") {
   SECTION("Simple vector") {
     const size_t size = 5;
@@ -413,18 +425,33 @@ TEST_CASE("When all") {
           return (int)i;
         }));
       }
+      
+      REQUIRE(vec[0].is_ready());
+      
+      for (size_t i = 1; i < size; ++i)
+        REQUIRE(!vec[i].is_ready());
+      
+      auto when_all_result_future = cf::when_all(vec.begin(), vec.end());
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      
+      REQUIRE(!when_all_result_future.is_ready());
+      
+      auto when_all_result = when_all_result_future.get();
+      REQUIRE(when_all_result.size() == size);
+      
+      for (size_t i = 0; i < size; ++i)
+        REQUIRE(when_all_result[i].get() == i);
     }
 
     SECTION("Ready futures") {
       for (size_t i = 0; i < size; ++i) {
         vec.push_back(cf::make_ready_future((int)i));
       }
-    }
-
-    auto when_all_result = cf::when_all(vec.begin(), vec.end()).get();
-    REQUIRE(when_all_result.size() == size);
-    for (size_t i = 0; i < size; ++i) {
-      REQUIRE(when_all_result[i].get() == i);
+      auto when_all_result = cf::when_all(vec.begin(), vec.end()).get();
+      REQUIRE(when_all_result.size() == size);
+      for (size_t i = 0; i < size; ++i) {
+        REQUIRE(when_all_result[i].get() == i);
+      }
     }
   }
 
@@ -502,7 +529,7 @@ TEST_CASE("When any") {
     cf::async_queued_executor queue_executor;
     cf::async_thread_pool_executor tp_executor(1);
     
-    auto when_any_result = cf::when_any(
+    auto when_any_result_future = cf::when_any(
       cf::make_ready_future<std::string>("Hello ").then(queue_executor,
         [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(25));
@@ -521,8 +548,10 @@ TEST_CASE("When any") {
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
           std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "world!";
-        })).get();
+        }));
     
+    REQUIRE(!when_any_result_future.is_ready());
+    auto when_any_result = when_any_result_future.get();
     REQUIRE(std::get<1>(when_any_result.sequence).is_ready() == false);
     
     REQUIRE(when_any_result.index == 0);
