@@ -4,10 +4,12 @@ This is an implementation of composable, continuing c++17 like [futures](http://
 
 Cf library consists of just one header with no dependencies except c++14 compliant standard library. Cf library comes with a constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
 
+Cf was tested on three major OS's. Minimum compiler requirements are: gcc-4.9, clang-3.7, vs2015.
+
 ## Executors
 The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
 Cf comes with three executors shipped. They are: 
-* `cf::sync_executor` - executes callable in place. This is just for the generic code convinience.
+* `cf::sync_executor` - executes callable in place.
 * `cf::async_queued_executor` - non blocking async queued executor.
 * `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker threads.
 
@@ -31,7 +33,7 @@ Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
-  http_response resp = http_request("my-site.com");
+  http_response resp = http_request("my-site.com")();
   resp.read_headers();                     // This is executed on the separate standalone thread
   return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
 }).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
@@ -72,7 +74,21 @@ std::is_same<
     });}))
 >::value == true;
 ```
-when_any
+`cf::when_any` and `cf::when_all` return `cf::future` which is ready when any or all of the input sequence futures become ready. These functions have iterator overloads and variadic overloads. Check here [when_all](http://en.cppreference.com/w/cpp/experimental/when_all), [when_any](http://en.cppreference.com/w/cpp/experimental/when_any) for more details.
 ```c++
+std::vector<std::string> urls = {"url1.org", "url2.org", "url3.org"};
+std::vector<cf::future<http_response>> response_future_vector;
+for (size_t i = 0; i < urls.size(); ++i) {
+  response_future_vector.push_back(cf::async([&urls, i] {
+    auto http_resp = http_request(urls[i])();
+    http_resp.read_all();
+    return http_resp;
+  }));
+}
+
+auto result_future = cf::when_any(response_future_vector.begin(), response_future_vector.end());
+auto result = result_future.get();    // blocks until one of the futures becomes ready.
+                                      // result.index == ready future index
+                                      // result.sequence contains original futures with sequence[index] ready
 
 ```
