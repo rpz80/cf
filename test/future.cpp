@@ -175,7 +175,7 @@ TEST_CASE("Future") {
   }
 }
 
-// TODO: more exeception tests
+// TODO: more exception tests
 
 TEST_CASE("async") {
   SECTION("in a row") {
@@ -253,6 +253,27 @@ TEST_CASE("async") {
     for (size_t i = 0; i < 10; ++i) {
       REQUIRE(v[i].is_ready());
       REQUIRE(v[i].get() == std::string("Hello") + std::to_string(i));
+    }
+  }
+}
+
+TEST_CASE("Exceptions") {
+  SECTION("exception in async") {
+    SECTION("1") {
+      auto f = cf::async([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        throw std::runtime_error("Exception");
+        return std::string("Hello");
+      });
+      REQUIRE(!f.is_ready());
+      std::this_thread::sleep_for(std::chrono::milliseconds(15));
+      REQUIRE(f.is_ready());
+      try {
+        f.get();
+        REQUIRE(false);
+      } catch (const std::exception& e) {
+        REQUIRE(e.what() == std::string("Exception"));
+      }
     }
   }
 }

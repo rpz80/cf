@@ -591,6 +591,8 @@ private:
   detail::shared_state_ptr<T> state_;
 };
 
+// TODO: shared_future
+
 template<>
 class future<void>;
 
