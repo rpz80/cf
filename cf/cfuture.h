@@ -594,8 +594,6 @@ private:
 template<>
 class future<void>;
 
-// TODO: then(f, executor) --> then(executor, f)
-
 template<typename T>
 template<typename F>
 detail::then_ret_type<T, F> future<T>::then(F&& f) {
@@ -842,8 +840,6 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
   
   return result;
 }
-
-// TODO: Check when_all implementation (remove tmp_result? anything else?)
 
 template<typename InputIt>
 auto when_all(InputIt first, InputIt last)
