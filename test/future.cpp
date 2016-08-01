@@ -498,6 +498,32 @@ TEST_CASE("When any") {
     }
   }
   
+  SECTION("Vector") {
+    const size_t size = 20;
+    std::vector<cf::future<int>> vec;
+    cf::async_thread_pool_executor executor(2);
+    
+    for (size_t i = 0; i < size; ++i) {
+      vec.push_back(cf::async(executor, [i, size] {
+        std::this_thread::sleep_for(std::chrono::milliseconds((i+1) * 50));
+        return (int)i;
+      }));
+    }
+    
+    for (size_t i = 0; i < size; ++i) {
+      auto when_any_result = cf::when_any(vec.begin(), vec.end()).get();
+      REQUIRE(when_any_result.sequence[0].is_ready());
+      //REQUIRE(when_any_result.sequence[0].get() == i);
+      
+      vec.clear();
+      
+      for (size_t j = 1; j < when_any_result.sequence.size(); ++j) {
+        REQUIRE(!when_any_result.sequence[j].is_ready());
+        vec.push_back(std::move(when_any_result.sequence[j]));
+      }
+    }
+  }
+  
   // TODO: runtime tuple by index getter && test
 
   SECTION("tuple async") {
