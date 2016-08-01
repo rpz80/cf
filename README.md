@@ -7,7 +7,7 @@ Cf library consists of just one header with no dependencies except c++14 complia
 ## Executors
 The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
 Cf comes with three executors shipped. They are: 
-* `cf::sync_executor` - executes callable in place. This is just for the generic code convinience.
+* `cf::sync_executor` - executes callable in place.
 * `cf::async_queued_executor` - non blocking async queued executor.
 * `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker threads.
 
