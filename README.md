@@ -31,7 +31,7 @@ Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
 auto f = cf::async([] {
-  http_response resp = http_request("my-site.com");
+  http_response resp = http_request("my-site.com")();
   resp.read_headers();                     // This is executed on the separate standalone thread
   return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
 }).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
@@ -72,7 +72,21 @@ std::is_same<
     });}))
 >::value == true;
 ```
-when_any
+`cf::when_any` and `cf::when_all` return `cf::future` which is ready when any or all of the input sequence futures become ready. These functions have iterator overloads and variadic overloads. Check here [when_all](http://en.cppreference.com/w/cpp/experimental/when_all) [when_any](http://en.cppreference.com/w/cpp/experimental/when_any) for more details.
 ```c++
+std::vector<std::string> urls = {"url1.org", "url2.org", "url3.org"};
+std::vector<cf::future<http_response>> response_future_vector;
+for (size_t i = 0; i < urls.size(); ++i) {
+  response_future_vector.push_back(cf::async([&urls, i] {
+    auto http_resp = http_request(urls[i])();
+    http_resp.read_all();
+    return http_resp;
+  }));
+}
+
+auto result_future = cf::when_any(response_future_vector.begin(), response_future_vector.end());
+auto result = result_future.get();    // blocks until one of the futures becomes ready.
+                                      // result.index == ready future index
+                                      // result.sequence contains original futures with sequence[index] ready
 
 ```
