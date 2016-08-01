@@ -72,7 +72,7 @@ std::is_same<
     });}))
 >::value == true;
 ```
-`cf::when_any` and `cf::when_all` return `cf::future` which is ready when any or all of the input sequence futures become ready. These functions have iterator overloads and variadic overloads. Check here [when_all](http://en.cppreference.com/w/cpp/experimental/when_all) [when_any](http://en.cppreference.com/w/cpp/experimental/when_any) for more details.
+`cf::when_any` and `cf::when_all` return `cf::future` which is ready when any or all of the input sequence futures become ready. These functions have iterator overloads and variadic overloads. Check here [when_all](http://en.cppreference.com/w/cpp/experimental/when_all), [when_any](http://en.cppreference.com/w/cpp/experimental/when_any) for more details.
 ```c++
 std::vector<std::string> urls = {"url1.org", "url2.org", "url3.org"};
 std::vector<cf::future<http_response>> response_future_vector;
