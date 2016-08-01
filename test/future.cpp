@@ -248,7 +248,7 @@ TEST_CASE("async") {
       REQUIRE(!v[i].is_ready());
     }
     
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
     
     for (size_t i = 0; i < 10; ++i) {
       REQUIRE(v[i].is_ready());
@@ -426,6 +426,7 @@ TEST_CASE("When all") {
         }));
       }
       
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
       REQUIRE(vec[0].is_ready());
       
       for (size_t i = 1; i < size; ++i)
