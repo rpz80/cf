@@ -254,10 +254,8 @@ private:
   std::condition_variable cond_;
 };
 
-// This is the void type analogue. 
 // Future<void> and promise<void> are explicitly forbidden.
-// If you need future just to signal that the async operation is ready,
-// use future<unit> and discard the result.
+// Use cf::unit instead.
 struct unit {};
 inline bool operator == (unit lhs, unit rhs) { return true; }
 inline bool operator != (unit lhs, unit rhs) { return false; }
