@@ -276,6 +276,49 @@ TEST_CASE("Exceptions") {
       }
     }
   }
+  
+  SECTION("exception fallthrough in then") {
+    auto f = cf::async([] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      throw std::runtime_error("Exception");
+      return std::string("Hello");
+    }).then([] (cf::future<std::string>) {
+      REQUIRE(false);
+      return cf::unit();
+    }).then([] (cf::future<cf::unit>) {
+      REQUIRE(false);
+      return cf::unit();
+    });
+    REQUIRE(!f.is_ready());
+    try {
+      f.get();
+      REQUIRE(false);
+    } catch (const std::exception& e) {
+      REQUIRE(e.what() == std::string("Exception"));
+    }
+  }
+  
+  SECTION("exception fallthrough in then via executor") {
+    cf::async_thread_pool_executor executor(1);
+    auto f = cf::async(executor, [] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      throw std::runtime_error("Exception");
+      return std::string("Hello");
+    }).then(executor, [] (cf::future<std::string>) {
+      REQUIRE(false);
+      return cf::unit();
+    }).then(executor, [] (cf::future<cf::unit>) {
+      REQUIRE(false);
+      return cf::unit();
+    });
+    REQUIRE(!f.is_ready());
+    try {
+      f.get();
+      REQUIRE(false);
+    } catch (const std::exception& e) {
+      REQUIRE(e.what() == std::string("Exception"));
+    }
+  }
 }
 
 TEST_CASE("Make future functions") {

@@ -218,7 +218,10 @@ public:
   }
 
   ~async_thread_pool_executor() {
-    need_stop_ = true;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      need_stop_ = true;
+    }
     cond_.notify_all();
     if (manager_thread_.joinable())
       manager_thread_.join();
