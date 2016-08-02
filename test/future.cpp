@@ -2,6 +2,9 @@
 #include "catch.hh"
 #include <type_traits>
 #include <cf/cfuture.h>
+#include <cf/sync_executor.h>
+#include <cf/async_queued_executor.h>
+#include <cf/async_thread_pool_executor.h>
 
 // aux stuff for types tests
 int foo(const cf::future<char>&);
