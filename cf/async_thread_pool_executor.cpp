@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "async_thread_pool_executor.h"
 
 namespace cf {
