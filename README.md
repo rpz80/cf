@@ -31,11 +31,11 @@ try {
   [](cf::future<tcp_client> client) {
     client.write("GET /");
     return client;
-  }).timeout(std::chrono::seconds(2), write_timeout("Write timeout", tw).then(executor,
+  }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
   [](cf::future<tcp_client> client) {
     client.read_until("/r/n/r/n");
     return client;
-  }).timeout(std::chrono::seconds(2), read_timeout("Read timeout", tw);
+  }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
   
   std::cout << client_future.get().data() << std::endl;
   
