@@ -7,11 +7,44 @@ Cf library has no dependencies except c++14 compliant standard library. Cf libra
 Cf was tested on three major OS's. Minimum compiler requirements are: gcc-4.9, clang-3.7, vs2015.
 
 ## Executors
-The most significant Cf difference from standard futures is the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
+Unlike standard futures Cf library implements the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
 Cf comes with three executors shipped. They are: 
 * `cf::sync_executor` - executes callable in place.
 * `cf::async_queued_executor` - non blocking async queued executor.
 * `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker threads.
+
+## Timeouts
+Also Cf futures support cancelation after certain timeout expired. User provided exception is stored in relevant future in this case and propagated through all subsequent `future::then`.
+```c++
+cf::time_watcher tw;
+cf::async_thread_pool_executor executor(4);
+
+struct connect_timeout : std::runtime_error {};
+struct write_timeout : std::runtime_error {};
+struct read_timeout : std::runtime_error {};
+
+try {
+  auto client_future = cf::async([client = tcp_client()] {
+    client.connect("mysite.com:8001");
+    return client;
+  }).timeout(std::chrono::seconds(10), connect_timeout, tw).then(executor, 
+  [](cf::future<tcp_client> client) {
+    client.write("GET /");
+    return client;
+  }).timeout(std::chrono::seconds(2), write_timeout, tw).then(executor,
+  [](cf::future<tcp_client> client) {
+    client.read_until("/r/n/r/n");
+    return client;
+  });
+  std::cout << client_future.get().data() << std::endl;
+} catch (const connect_timeout& e) {
+  std::cerr << "Connect timeout" << std::endl;
+} catch (const write_timeout& e) {
+  std::cerr << "Write timeout" << std::endl;
+} catch (const read_timeout& e) {
+  std::cerr << "Read timeout" << std::endl;
+}
+```
 
 ## Cf current state
 |Feature name|Standard library (including c++17)|CF   |Compliance|
@@ -25,6 +58,8 @@ Cf comes with three executors shipped. They are:
 |[when_any](http://en.cppreference.com/w/cpp/experimental/when_any)|Yes|Yes||
 |[make_ready_future](http://en.cppreference.com/w/cpp/experimental/make_ready_future)|Yes|Yes||
 |[make_exceptional_future](http://en.cppreference.com/w/cpp/experimental/make_exceptional_future)|Yes|Yes||
+|executors|No|Yes||
+|timeouts|No|Yes||
 
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
