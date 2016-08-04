@@ -414,6 +414,7 @@ private:
 };
 
 // TODO: shared_future
+// TODO: T& specialization. Forbid and test.
 
 template<>
 class future<void>;
