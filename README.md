@@ -44,7 +44,7 @@ try {
 } catch (const write_timeout& e) {
   std::cerr << e.what() << std::endl;
 } catch (const read_timeout& e) {
-  std::cerr << e.what() << std::endl;
+  std::cerr << e.what() << std::endl; 
 }
 ```
 
