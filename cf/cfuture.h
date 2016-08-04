@@ -68,6 +68,12 @@ enum class status {
   timeout
 };
 
+enum class timeout_state {
+  not_set,
+  expired,
+  result_set
+};
+
 #define ERRC_LIST(APPLY) \
   APPLY(broken_promise) \
   APPLY(future_already_retrieved) \
@@ -190,6 +196,11 @@ public:
                      errc_string(errc::broken_promise)));
     set_ready(lock);
   }
+  
+  std::mutex& get_timeout_mutex() { return timeout_mutex_; }
+  
+  timeout_state expired() const { return timeout_state_; }
+  void expired(timeout_state state) {timeout_state_ = state; }
 
 protected:
   void throw_if_satisfied() {
@@ -204,6 +215,8 @@ protected:
   std::atomic<bool> satisfied_;
   std::exception_ptr exception_ptr_;
   cb_type cb_ = []() {};
+  timeout_state timeout_state_ = timeout_state::not_set;
+  std::mutex timeout_mutex_;
 };
 
 template<typename T>
@@ -318,6 +331,11 @@ public:
 
   template<typename F>
   detail::then_ret_type<T, F> then(F&& f);
+  
+template<typename Rep, typename Period, typename TimeWatcher, typename Exception>
+future<T> timeout(std::chrono::duration<Rep, Period> duration,
+                  const Exception& exception,
+                  TimeWatcher& watcher);
 
   template<typename F, typename Executor>
   detail::then_ret_type<T, F> then(Executor& executor, F&& f);
@@ -543,6 +561,39 @@ future<T>::then_impl(F&& f, Executor& executor) {
     }
   });
 
+  return ret;
+}
+
+template<typename T>
+template<typename Rep, typename Period, typename TimeWatcher, typename Exception>
+future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
+                             const Exception& exception,
+                             TimeWatcher& watcher) {
+  auto promise_ptr = std::make_shared<promise<T>>();
+  future<T> ret = promise_ptr->get_future();
+  
+  watcher.add([promise_ptr,
+               state = this->state_->shared_from_this(),
+               exception] () mutable {
+    std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
+    if (state->expired() == timeout_state::result_set)
+      return;
+    state->expired(timeout_state::expired);
+    promise_ptr->set_exception(std::make_exception_ptr(exception));
+  }, duration);
+  
+  set_callback([promise_ptr, state = this->state_->shared_from_this()] () mutable {
+    std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
+    if (state->expired() == timeout_state::expired)
+      return;
+    state->expired(timeout_state::result_set);
+    if (state->has_exception())
+      promise_ptr->set_exception(state->get_exception());
+    else {
+      promise_ptr->set_value(cf::make_ready_future<T>(state->get_value()));
+    }
+  });
+  
   return ret;
 }
 

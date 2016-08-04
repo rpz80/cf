@@ -57,8 +57,7 @@ void async_thread_pool_executor::worker_thread::start_task(
 }
 
 async_thread_pool_executor::async_thread_pool_executor(size_t size)
-  : tp_(size),
-    need_stop_(false) {
+  : tp_(size) {
   manager_thread_ = std::thread([this] {
     while (!need_stop_) {
       std::unique_lock<std::mutex> lock(mutex_);

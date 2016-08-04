@@ -5,6 +5,7 @@
 #include <cf/sync_executor.h>
 #include <cf/async_queued_executor.h>
 #include <cf/async_thread_pool_executor.h>
+#include <cf/time_watcher.h>
 
 // aux stuff for types tests
 int foo(const cf::future<char>&);
@@ -178,8 +179,6 @@ TEST_CASE("Future") {
   }
 }
 
-// TODO: more exception tests
-
 TEST_CASE("async") {
   SECTION("in a row") {
     cf::async_queued_executor executor;
@@ -322,6 +321,28 @@ TEST_CASE("Exceptions") {
       REQUIRE(e.what() == std::string("Exception"));
     }
   }
+}
+
+TEST_CASE("Time watcher") {
+  cf::time_watcher tw;
+  std::vector<std::chrono::time_point<std::chrono::steady_clock>> tp_vec;
+  auto start_point = std::chrono::steady_clock::now();
+  
+  tw.add([&tp_vec] {
+    tp_vec.push_back(std::chrono::steady_clock::now());
+  }, std::chrono::milliseconds(100));
+  
+  tw.add([&tp_vec] {
+    tp_vec.push_back(std::chrono::steady_clock::now());
+  }, std::chrono::milliseconds(200));
+  
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  REQUIRE(tp_vec.size() == 2);
+  REQUIRE(tp_vec[0] - start_point < std::chrono::milliseconds(110));
+  REQUIRE(tp_vec[0] - start_point > std::chrono::milliseconds(90));
+  
+  REQUIRE(tp_vec[1] - start_point < std::chrono::milliseconds(210));
+  REQUIRE(tp_vec[1] - start_point > std::chrono::milliseconds(190));
 }
 
 TEST_CASE("Make future functions") {
@@ -635,10 +656,10 @@ TEST_CASE("When any") {
           std::this_thread::sleep_for(std::chrono::milliseconds(25));
           return f.get() + "composable ";
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(25));
+          std::this_thread::sleep_for(std::chrono::milliseconds(35));
           return f.get() + "futures ";
         }).then(tp_executor, [] (cf::future<std::string> f) mutable {
-          std::this_thread::sleep_for(std::chrono::milliseconds(175));
+          std::this_thread::sleep_for(std::chrono::milliseconds(75));
           return f.get() + "world!";
         }));
     

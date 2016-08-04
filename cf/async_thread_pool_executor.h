@@ -4,7 +4,8 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
-#include "common.h"
+
+#include <cf/common.h>
 
 namespace cf {
 class async_thread_pool_executor {
@@ -26,7 +27,7 @@ class async_thread_pool_executor {
   private:
     std::thread thread_;
     mutable std::mutex m_;
-    bool need_stop_ = false;
+    std::atomic<bool> need_stop_ = {false};
     std::condition_variable start_cond_;
     detail::task_type task_;
     detail::task_type completion_cb_;
@@ -46,7 +47,7 @@ private:
   mutable std::mutex mutex_;
   std::queue<detail::task_type> task_queue_;
   std::thread manager_thread_;
-  bool need_stop_;
+  std::atomic<bool> need_stop_ = {false};
   std::condition_variable cond_;
 };
 }
