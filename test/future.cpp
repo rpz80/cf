@@ -336,13 +336,28 @@ TEST_CASE("Time watcher") {
     tp_vec.push_back(std::chrono::steady_clock::now());
   }, std::chrono::milliseconds(200));
   
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  std::this_thread::sleep_for(std::chrono::milliseconds(400));
   REQUIRE(tp_vec.size() == 2);
   REQUIRE(tp_vec[0] - start_point < std::chrono::milliseconds(110));
   REQUIRE(tp_vec[0] - start_point > std::chrono::milliseconds(90));
   
   REQUIRE(tp_vec[1] - start_point < std::chrono::milliseconds(210));
   REQUIRE(tp_vec[1] - start_point > std::chrono::milliseconds(190));
+}
+
+TEST_CASE("Time watcher. Future timeout") {
+  cf::time_watcher tw;
+  std::runtime_error timeout_error("timeout");
+  
+  try {
+    cf::async([] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      return 42;
+    }).timeout(std::chrono::milliseconds(50), timeout_error, tw).get();
+    REQUIRE(false);
+  } catch (const std::exception& e) {
+    REQUIRE(e.what() == std::string("timeout"));
+  }
 }
 
 TEST_CASE("Make future functions") {

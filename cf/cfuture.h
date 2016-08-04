@@ -590,7 +590,7 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
     if (state->has_exception())
       promise_ptr->set_exception(state->get_exception());
     else {
-      promise_ptr->set_value(cf::make_ready_future<T>(state->get_value()));
+      promise_ptr->set_value(state->get_value());
     }
   });
   
