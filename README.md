@@ -19,30 +19,32 @@ Also Cf futures support cancelation after certain timeout expired. User provided
 cf::time_watcher tw;
 cf::async_thread_pool_executor executor(4);
 
-struct connect_timeout : std::runtime_error {};
-struct write_timeout : std::runtime_error {};
-struct read_timeout : std::runtime_error {};
+struct connect_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+struct write_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+struct read_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
 
 try {
   auto client_future = cf::async([client = tcp_client()] {
     client.connect("mysite.com:8001");
     return client;
-  }).timeout(std::chrono::seconds(10), connect_timeout, tw).then(executor, 
+  }).timeout(std::chrono::seconds(10), connect_timeout("Connect timeout"), tw).then(executor, 
   [](cf::future<tcp_client> client) {
     client.write("GET /");
     return client;
-  }).timeout(std::chrono::seconds(2), write_timeout, tw).then(executor,
+  }).timeout(std::chrono::seconds(2), write_timeout("Write timeout", tw).then(executor,
   [](cf::future<tcp_client> client) {
     client.read_until("/r/n/r/n");
     return client;
-  });
+  }).timeout(std::chrono::seconds(2), reade_timeout("Read timeout", tw);
+  
   std::cout << client_future.get().data() << std::endl;
+  
 } catch (const connect_timeout& e) {
-  std::cerr << "Connect timeout" << std::endl;
+  std::cerr << e.what() << std::endl;
 } catch (const write_timeout& e) {
-  std::cerr << "Write timeout" << std::endl;
+  std::cerr << e.what() << std::endl;
 } catch (const read_timeout& e) {
-  std::cerr << "Read timeout" << std::endl;
+  std::cerr << e.what() << std::endl;
 }
 ```
 
