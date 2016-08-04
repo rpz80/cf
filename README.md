@@ -35,7 +35,7 @@ try {
   [](cf::future<tcp_client> client) {
     client.read_until("/r/n/r/n");
     return client;
-  }).timeout(std::chrono::seconds(2), reade_timeout("Read timeout", tw);
+  }).timeout(std::chrono::seconds(2), read_timeout("Read timeout", tw);
   
   std::cout << client_future.get().data() << std::endl;
   
