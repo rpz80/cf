@@ -25,10 +25,7 @@ async_thread_pool_executor::worker_thread::~worker_thread() {
 }
 
 void async_thread_pool_executor::worker_thread::stop() {
-  {
-    std::lock_guard<std::mutex> lock(m_);
-    need_stop_ = true;
-  }
+  need_stop_ = true;
   start_cond_.notify_all();
   if (thread_.joinable())
     thread_.join();
@@ -84,10 +81,7 @@ async_thread_pool_executor::async_thread_pool_executor(size_t size)
 }
 
 async_thread_pool_executor::~async_thread_pool_executor() {
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    need_stop_ = true;
-  }
+  need_stop_ = true;
   cond_.notify_all();
   if (manager_thread_.joinable())
     manager_thread_.join();
