@@ -88,7 +88,7 @@ auto f = cf::async([] {
 
 f.wait();
 ```
-Async itself may be called with the executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, in place) may easily be implemented as an executor. For example:
+Async itself may be called with an executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, in place) may easily be implemented as an executor. For example:
 
 ```c++
 cf::sync_executor executor;
