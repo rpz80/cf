@@ -7,7 +7,7 @@ Cf library has no dependencies except c++14 compliant standard library. Cf libra
 Cf was tested on three major OS's. Minimum compiler requirements are: gcc-4.9, clang-3.7, vs2015.
 
 ## Executors
-Unlike standard futures Cf library implements the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
+Unlike standard futures Cf library implements the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables `cf::future` continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.
 Cf comes with three executors shipped. They are: 
 * `cf::sync_executor` - executes callable in place.
 * `cf::async_queued_executor` - non blocking async queued executor.
@@ -19,35 +19,37 @@ Also Cf futures support cancelation after certain timeout expired. User provided
 cf::time_watcher tw;
 cf::async_thread_pool_executor executor(4);
 
-struct connect_timeout : std::runtime_error {};
-struct write_timeout : std::runtime_error {};
-struct read_timeout : std::runtime_error {};
+struct connect_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+struct write_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+struct read_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
 
 try {
   auto client_future = cf::async([client = tcp_client()] {
     client.connect("mysite.com:8001");
     return client;
-  }).timeout(std::chrono::seconds(10), connect_timeout, tw).then(executor, 
+  }).timeout(std::chrono::seconds(10), connect_timeout("Connect timeout"), tw).then(executor, 
   [](cf::future<tcp_client> client) {
     client.write("GET /");
     return client;
-  }).timeout(std::chrono::seconds(2), write_timeout, tw).then(executor,
+  }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
   [](cf::future<tcp_client> client) {
     client.read_until("/r/n/r/n");
     return client;
-  });
+  }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
+  
   std::cout << client_future.get().data() << std::endl;
+  
 } catch (const connect_timeout& e) {
-  std::cerr << "Connect timeout" << std::endl;
+  std::cerr << e.what() << std::endl;
 } catch (const write_timeout& e) {
-  std::cerr << "Write timeout" << std::endl;
+  std::cerr << e.what() << std::endl;
 } catch (const read_timeout& e) {
-  std::cerr << "Read timeout" << std::endl;
+  std::cerr << e.what() << std::endl; 
 }
 ```
 
 ## Cf current state
-|Feature name|Standard library (including c++17)|CF   |Compliance|
+|Feature name|Standard library (including c++17)|CF   |Standard compliance|
 |------------|:--------------------------------:|:---:|----------|
 |[future](http://en.cppreference.com/w/cpp/experimental/future)|Yes|Yes|No share() member function. No void (use cf::unit instead) and T& specializations.|
 |[promise](http://en.cppreference.com/w/cpp/thread/promise)|Yes|Yes|No set_\*\*_at_thread_exit member functions. No void and T& specializations.|
@@ -86,7 +88,7 @@ auto f = cf::async([] {
 
 f.wait();
 ```
-Async itself may be called with the executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, in place) may easily be implemented as an executor. For example:
+Async itself may be called with an executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, etc) may easily be implemented as an executor. For example:
 
 ```c++
 cf::sync_executor executor;
