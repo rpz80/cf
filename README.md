@@ -49,7 +49,7 @@ try {
 ```
 
 ## Cf current state
-|Feature name|Standard library (including c++17)|CF   |Compliance|
+|Feature name|Standard library (including c++17)|CF   |Standard compliance|
 |------------|:--------------------------------:|:---:|----------|
 |[future](http://en.cppreference.com/w/cpp/experimental/future)|Yes|Yes|No share() member function. No void (use cf::unit instead) and T& specializations.|
 |[promise](http://en.cppreference.com/w/cpp/thread/promise)|Yes|Yes|No set_\*\*_at_thread_exit member functions. No void and T& specializations.|
