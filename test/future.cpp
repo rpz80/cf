@@ -346,17 +346,102 @@ TEST_CASE("Time watcher") {
 }
 
 TEST_CASE("Time watcher. Future timeout") {
-  cf::time_watcher tw;
-  std::runtime_error timeout_error("timeout");
+  SECTION("1") {
+    struct connect_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+    struct write_timeout : std::runtime_error {};
+    struct read_timeout : std::runtime_error {};
+    
+    connect_timeout ct("");
+
+    cf::time_watcher tw;
+    std::runtime_error timeout_error("timeout");
+    
+    try {
+      cf::async([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        return 42;
+      }).timeout(std::chrono::milliseconds(50), timeout_error, tw).get();
+      REQUIRE(false);
+    } catch (const std::exception& e) {
+      REQUIRE(e.what() == std::string("timeout"));
+    }
+  }
   
-  try {
-    cf::async([] {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      return 42;
-    }).timeout(std::chrono::milliseconds(50), timeout_error, tw).get();
-    REQUIRE(false);
-  } catch (const std::exception& e) {
-    REQUIRE(e.what() == std::string("timeout"));
+  SECTION("2") {
+    cf::time_watcher tw;
+    cf::async_thread_pool_executor executor(4);
+
+    struct connect_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+    struct write_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+    struct read_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+
+    struct tcp_client {
+      tcp_client(std::chrono::milliseconds connect_time,
+                 std::chrono::milliseconds write_time,
+                 std::chrono::milliseconds read_time)
+        : connect_time(connect_time),
+          write_time(write_time),
+          read_time(read_time) {}
+      
+      tcp_client() = default;
+      tcp_client(tcp_client&& other) = default;
+      tcp_client& operator=(tcp_client&& other) = default;
+      
+      void connect(const char*) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(connect_time));
+      }
+      
+      void write(const char*) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(write_time));
+      }
+      
+      void read_until(const char*) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(read_time));
+      }
+      
+      std::string data() const {
+        return "Some data";
+      }
+      
+      std::chrono::milliseconds connect_time;
+      std::chrono::milliseconds write_time;
+      std::chrono::milliseconds read_time;
+    };
+    
+    SECTION("connect timeout") {
+      tcp_client client(std::chrono::milliseconds(1000),
+                        std::chrono::milliseconds(100),
+                        std::chrono::milliseconds(200));
+      try {
+        auto client_future = cf::async([client = std::move(client)] () mutable {
+          client.connect("mysite.com:8001");
+          return std::move(client);
+        }).timeout(std::chrono::milliseconds(500), connect_timeout("Connect timeout"), tw).then(executor,
+        [](cf::future<tcp_client> client_future) mutable {
+          auto client = client_future.get();
+          client.write("GET /");
+          return client;
+        }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
+        [](cf::future<tcp_client> client_future) mutable {
+          auto client = client_future.get();
+          client.read_until("/r/n/r/n");
+          return client;
+        }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
+        
+        std::cout << client_future.get().data() << std::endl;
+        REQUIRE(false);
+
+      } catch (const connect_timeout& e) {
+        REQUIRE(e.what() == std::string("Connect timeout"));
+        std::cerr << e.what() << std::endl;
+      } catch (const write_timeout& e) {
+        REQUIRE(false);
+        std::cerr << e.what() << std::endl;
+      } catch (const read_timeout& e) {
+        REQUIRE(false);
+        std::cerr << e.what() << std::endl; 
+      }
+    }
   }
 }
 
