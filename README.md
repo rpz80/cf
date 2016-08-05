@@ -24,21 +24,23 @@ struct write_timeout : std::runtime_error { using std::runtime_error::runtime_er
 struct read_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
 
 try {
-  auto client_future = cf::async([client = tcp_client()] {
+  auto client_future = cf::async([client = tcp_client()] () mutable {
     client.connect("mysite.com:8001");
-    return client;
-  }).timeout(std::chrono::seconds(10), connect_timeout("Connect timeout"), tw).then(executor, 
-  [](cf::future<tcp_client> client) {
+    return std::move(client);
+  }).timeout(std::chrono::milliseconds(500), connect_timeout("Connect timeout"), tw).then(executor,
+  [](cf::future<tcp_client> client_future) mutable {
+    auto client = client_future.get();
     client.write("GET /");
     return client;
   }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
-  [](cf::future<tcp_client> client) {
+  [](cf::future<tcp_client> client_future) mutable {
+    auto client = client_future.get();
     client.read_until("/r/n/r/n");
     return client;
   }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
   
   std::cout << client_future.get().data() << std::endl;
-  
+
 } catch (const connect_timeout& e) {
   std::cerr << e.what() << std::endl;
 } catch (const write_timeout& e) {
