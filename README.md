@@ -49,6 +49,7 @@ try {
   std::cerr << e.what() << std::endl; 
 }
 ```
+Note though, that currently timeout is set at the point of future creation (in the example above during `cf::future::then` invocations, i.e. all timeouts are set almost at the same moment). Thus second and subsequent `cf::future::timeout`s should consider approximate duration of the previous calls when setting timeout values.
 
 ## Cf current state
 |Feature name|Standard library (including c++17)|CF   |Standard compliance|
