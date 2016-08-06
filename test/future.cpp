@@ -442,6 +442,40 @@ TEST_CASE("Time watcher. Future timeout") {
       }
     }
     
+    SECTION("connect timeout T*") {
+      tcp_client client(std::chrono::milliseconds(1000),
+                        std::chrono::milliseconds(100),
+                        std::chrono::milliseconds(200));
+      try {
+        auto client_future = cf::async([pclient = &client] () mutable {
+          pclient->connect("mysite.com:8001");
+          return pclient;
+        }).timeout(std::chrono::milliseconds(500), connect_timeout("Connect timeout"), tw).then(executor,
+        [](cf::future<tcp_client*> client_future) mutable {
+          auto client = client_future.get();
+          client->write("GET /");
+          return client;
+        }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
+        [](cf::future<tcp_client*> client_future) mutable {
+          auto client = client_future.get();
+          client->read_until("/r/n/r/n");
+          return client;
+        }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
+        
+        std::cout << client_future.get()->data() << std::endl;
+        REQUIRE(false);
+
+      } catch (const connect_timeout& e) {
+        REQUIRE(e.what() == std::string("Connect timeout"));
+      } catch (const write_timeout& e) {
+        REQUIRE(false);
+        std::cerr << e.what() << std::endl;
+      } catch (const read_timeout& e) {
+        REQUIRE(false);
+        std::cerr << e.what() << std::endl; 
+      }
+    }
+    
     SECTION("write timeout") {
       tcp_client client(std::chrono::milliseconds(100),
                         std::chrono::milliseconds(400),

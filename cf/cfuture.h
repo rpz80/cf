@@ -420,6 +420,9 @@ template<>
 class future<void>;
 
 template<typename T>
+class future<T&>;
+
+template<typename T>
 template<typename F>
 detail::then_ret_type<T, F> future<T>::then(F&& f) {
   check_state(state_);
@@ -647,6 +650,9 @@ private:
 
 template<>
 class promise<void>;
+
+template<typename T>
+class promise<T&>;
 
 template<typename U>
 future<U> make_ready_future(U&& u) {
