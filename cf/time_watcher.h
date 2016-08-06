@@ -9,9 +9,6 @@
 #include <thread>
 #include <cf/common.h>
 
-// TODO: rework timeout start points.
-// timeout should start together with continuation.
-
 namespace cf {
 class time_watcher {
   struct record {
