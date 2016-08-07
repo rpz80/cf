@@ -26,7 +26,7 @@ struct read_timeout : std::runtime_error { using std::runtime_error::runtime_err
 try {
   auto client_future = cf::async([client = tcp_client()] () mutable {
     client.connect("mysite.com:8001");
-    return std::move(client);
+    return client;  // client is moved from future to future. supposed to be a cheap operation
   }).timeout(std::chrono::milliseconds(500), connect_timeout("Connect timeout"), tw).then(executor,
   [](cf::future<tcp_client> client_future) mutable {
     auto client = client_future.get();
@@ -49,6 +49,7 @@ try {
   std::cerr << e.what() << std::endl; 
 }
 ```
+Note though, that currently timeout is set at the point of future creation (in the example above during `cf::future::then` invocations, i.e. all timeouts are set almost at the same moment). Thus second and subsequent `cf::future::timeout`s should consider approximate duration of the previous calls when setting timeout values.
 
 ## Cf current state
 |Feature name|Standard library (including c++17)|CF   |Standard compliance|
