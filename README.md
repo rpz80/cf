@@ -14,7 +14,7 @@ Cf comes with three executors shipped. They are:
 * `cf::async_thread_pool_executor` - almost same as above, except posted callables may be executed on one of the free worker threads.
 
 ## Timeouts
-Also Cf futures support cancelation after certain timeout expired. User provided exception is stored in relevant future in this case and propagated through all subsequent `future::then`. Timeouts are handled by `cf::time_watcher`. As with executors, TimeWatcher might be object of any type with `::add(const std::function<void()>&, std::chrono::duration<Rep, Period> timeout)` member function.
+Also Cf futures support cancelation after certain timeout expired. User provided exception is stored in relevant future in this case and propagated through all subsequent `future::then`. Timeouts are handled by `cf::time_watcher`. As with executors, TimeWatcher might be an object of any type with `::add(const std::function<void()>&, std::chrono::duration<Rep, Period> timeout)` member function.
 ```c++
 cf::time_watcher tw;
 cf::async_thread_pool_executor executor(4);
