@@ -72,24 +72,28 @@ For the basic future/promise/async examples please refer to http://en.cppreferen
 Async + then + then via executor
 ```c++
 cf::async_queued_executor executor;
-auto f = cf::async([] {
-  http_response resp = http_request("my-site.com")();
-  resp.read_headers();                     // This is executed on the separate standalone thread
-  return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
-}).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
-  auto resp = f.get();
-  if (resp.code() == http::Ok)             // The continuation may be executed on different contexts.
-    resp.read_body();                      // This time - on the async thread.
-  return resp;                             
-}).then(executor, [] (cf::future<http_response> f) {
-  auto resp = f.get();                     // And this time on the async_queued_executor context.
-  process(resp.body());
-  return cf::unit();                       // When you don't need result - use cf::unit.
-}).then([] (cf::future<cf::unit>) {
-  log() << "body processed" << std::endl;
-});
-
-f.wait();
+try {
+  auto f = cf::async([] {
+    http_response resp = http_request("my-site.com")();
+    resp.read_headers();                     // This is executed on the separate standalone thread
+    return resp;                             // Result, when it's ready, is stored in cf::future<http_response>.
+  }).then([] (cf::future<http_response> f) { // Which in turn is passed to the continuation.
+    auto resp = f.get();
+    if (resp.code() == http::Ok)             // The continuation may be executed on different contexts.
+      resp.read_body();                      // This time - on the async thread.
+    else 
+      throw std::domain_error("Bad response");
+    return resp;                             
+  }).then(executor, [] (cf::future<http_response> f) {
+    auto resp = f.get();                     // And this time on the async_queued_executor context.
+    process(resp.body());
+    return cf::unit();                       // When you don't need result - use cf::unit.
+  }).then([] (cf::future<cf::unit>) {
+    log() << "body processed" << std::endl;
+  }).get();
+} catch (const std::exception& e) {
+  std::cerr << e.what() << std::endl;
+}
 ```
 Async itself may be called with an executor. It is one of the reasons why there are no `launch::policy` in Cf. Every possible policy (async, deferred, etc) may easily be implemented as an executor. For example:
 
