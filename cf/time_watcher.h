@@ -1,6 +1,5 @@
 #pragma once
 
-//#include <iostream>
 #include <chrono>
 #include <set>
 #include <mutex>
@@ -36,7 +35,6 @@ public:
       record_set_.emplace(
           std::chrono::duration_cast<std::chrono::milliseconds>(timeout),
           task);
-//      std::cout << "Woking up" << std::endl;
     }
     cond_.notify_one();
   }

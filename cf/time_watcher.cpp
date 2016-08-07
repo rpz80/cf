@@ -10,8 +10,6 @@ time_watcher::time_watcher()
         bool thc = time_has_come();
         if (!thc && !record_set_.empty())
           wakeup_time_ = record_set_.begin()->time;
-//        std::cout << "cond triggered. time_has_come: " << thc
-//                  << ". set size: " << record_set_.size() << std::endl;
         return need_stop_ || thc;
       });
       if (need_stop_)
