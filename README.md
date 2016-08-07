@@ -19,9 +19,9 @@ Also Cf futures support cancelation after certain timeout expired. User provided
 cf::time_watcher tw;
 cf::async_thread_pool_executor executor(4);
 
-struct connect_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
-struct write_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
-struct read_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
+struct connect_timeout : std::domain_error { using std::domain_error::domain_error; };
+struct write_timeout : std::domain_error { using std::domain_error::domain_error; };
+struct read_timeout : std::domain_error { using std::domain_error::domain_error; };
 
 try {
   auto client_future = cf::async([client = tcp_client()] () mutable {
