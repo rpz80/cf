@@ -52,7 +52,7 @@ try {
 Note though, that timeout timer starts at the point of `cf::future::timeout` invocation, i.e. all timeouts in the example above are scheduled almost at the same moment. Thus when calling `cf::future::timeout` second and subsequent times consider adding up approximate duration of the previous calls when choosing timeout values.
 
 ## Cf current state
-|Feature name|Standard library (including c++17)|CF   |Standard compliance|
+|Feature name|Standard library (including c++17)|Cf   |Standard compliance|
 |------------|:--------------------------------:|:---:|----------|
 |[future](http://en.cppreference.com/w/cpp/experimental/future)|Yes|Yes|No share() member function. No void (use cf::unit instead) and T& specializations.|
 |[promise](http://en.cppreference.com/w/cpp/thread/promise)|Yes|Yes|No set_\*\*_at_thread_exit member functions. No void and T& specializations.|
