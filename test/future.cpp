@@ -241,7 +241,7 @@ TEST_CASE("async") {
     
     for (size_t i = 0; i < 10; ++i) {
       v.emplace_back(cf::async(executor, [i] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
         return std::string("Hello") + std::to_string(i);
       }));
     }
