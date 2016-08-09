@@ -15,6 +15,7 @@ async_thread_pool_executor::worker_thread::worker_thread() {
       task_();
       lock.lock();
       task_ = nullptr;
+      has_task_ = false;
       completion_cb_();
     }
   });
@@ -32,8 +33,7 @@ void async_thread_pool_executor::worker_thread::stop() {
 }
 
 bool async_thread_pool_executor::worker_thread::available() const {
-  std::lock_guard<std::mutex> lock(m_);
-  return !(bool)task_;
+  return !has_task_;
 }
 
 void async_thread_pool_executor::worker_thread::post(
@@ -48,6 +48,7 @@ void async_thread_pool_executor::worker_thread::post(
 void async_thread_pool_executor::worker_thread::start_task(
     const detail::task_type& task,
     const detail::task_type& completion_cb) {
+  has_task_ = true;
   task_ = task;
   completion_cb_ = completion_cb;
   start_cond_.notify_one();

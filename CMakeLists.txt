@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project("cf-root")
 if (MSVC)
-  set(CMAKE_CXX_FLAGS "/EHsc")
+  set(CMAKE_CXX_FLAGS "/EHsc /bigobj")
 else()
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "-std=c++14 -pedantic -stdlib=libc++")
