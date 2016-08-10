@@ -50,6 +50,7 @@ private:
   std::queue<detail::task_type> task_queue_;
   std::thread manager_thread_;
   std::atomic<bool> need_stop_ = {false};
+  std::atomic<size_t> available_count_;
   std::condition_variable cond_;
 };
 }

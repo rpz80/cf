@@ -261,7 +261,7 @@ TEST_CASE("async") {
       }));
     }
 
-    measure(start_time, tp_executor_2_name, ": populating vector took ", 10);
+    measure(start_time, tp_executor_2_name, ": populating vector took ", 0);
     start_time = std::chrono::steady_clock::now();
     
     for (size_t i = 0; i < 10; ++i) 

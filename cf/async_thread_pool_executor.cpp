@@ -55,14 +55,16 @@ void async_thread_pool_executor::worker_thread::start_task(
 }
 
 async_thread_pool_executor::async_thread_pool_executor(size_t size)
-  : tp_(size) {
+  : tp_(size),
+    available_count_(size) {
   manager_thread_ = std::thread([this] {
     while (!need_stop_) {
       std::unique_lock<std::mutex> lock(mutex_);
       cond_.wait(lock, [this] {
-        return need_stop_ || !task_queue_.empty(); 
+        return need_stop_ || (!task_queue_.empty() && 
+                              available_count_ > 0); 
       });
-      while (!task_queue_.empty()) {
+      while (!task_queue_.empty() && available_count_ > 0) {
         if (need_stop_)
           return;
         auto ready_it = std::find_if(tp_.begin(), tp_.end(), 
@@ -70,10 +72,12 @@ async_thread_pool_executor::async_thread_pool_executor(size_t size)
             return worker.available();
         });
         if (ready_it == tp_.end())
-          break;
+          throw std::runtime_error("No available workers");
         auto task = task_queue_.front();
         task_queue_.pop();
+        --available_count_;
         ready_it->post(task, [this] {
+          ++available_count_;
           cond_.notify_one();
         });
       }
@@ -92,10 +96,7 @@ async_thread_pool_executor::~async_thread_pool_executor() {
 }
 
 size_t async_thread_pool_executor::available() const {
-  return std::count_if(tp_.begin(), tp_.end(), 
-  [](const worker_thread& worker) { 
-    return worker.available();
-  });
+  return (size_t)available_count_;
 }
 
 void async_thread_pool_executor::post(const detail::task_type& task) {
