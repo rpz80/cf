@@ -34,7 +34,7 @@ Also Cf futures support cancelation after certain timeout expired. User provided
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
 
-### Async, then, then via executor
+### async, then, then via executor
 ```c++
 cf::async_queued_executor executor;
 try {
@@ -83,7 +83,7 @@ std::is_same<
     });}))
 >::value == true;
 ```
-### Timeouts
+### timeouts
 ```c++
 cf::time_watcher tw;
 cf::async_thread_pool_executor executor(4);
