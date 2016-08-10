@@ -15,41 +15,6 @@ Cf comes with three executors shipped. They are:
 
 ## Timeouts
 Also Cf futures support cancelation after certain timeout expired. User provided exception is stored in relevant future in this case and propagated through all subsequent `future::then`. Timeouts are handled by `cf::time_watcher`. As with executors, TimeWatcher might be an object of any type with `::add(const std::function<void()>&, std::chrono::duration<Rep, Period> timeout)` member function.
-```c++
-cf::time_watcher tw;
-cf::async_thread_pool_executor executor(4);
-
-struct connect_timeout : std::domain_error { using std::domain_error::domain_error; };
-struct write_timeout : std::domain_error { using std::domain_error::domain_error; };
-struct read_timeout : std::domain_error { using std::domain_error::domain_error; };
-
-try {
-  auto client_future = cf::async([client = tcp_client()] () mutable {
-    client.connect("mysite.com:8001");
-    return client;  // client is moved from future to future. supposed to be a cheap operation
-  }).timeout(std::chrono::milliseconds(500), connect_timeout("Connect timeout"), tw).then(executor,
-  [](cf::future<tcp_client> client_future) mutable {
-    auto client = client_future.get();
-    client.write("GET /");
-    return client;
-  }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
-  [](cf::future<tcp_client> client_future) mutable {
-    auto client = client_future.get();
-    client.read_until("/r/n/r/n");
-    return client;
-  }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
-  
-  std::cout << client_future.get().data() << std::endl;
-
-} catch (const connect_timeout& e) {
-  std::cerr << e.what() << std::endl;
-} catch (const write_timeout& e) {
-  std::cerr << e.what() << std::endl;
-} catch (const read_timeout& e) {
-  std::cerr << e.what() << std::endl; 
-}
-```
-Note though, that timeout timer starts at the point of `cf::future::timeout` invocation, i.e. all timeouts in the example above are scheduled almost at the same moment. Thus when calling `cf::future::timeout` second and subsequent times consider adding up approximate duration of the previous calls when choosing timeout values.
 
 ## Cf current state
 |Feature name|Standard library (including c++17)|Cf   |Standard compliance|
@@ -69,7 +34,7 @@ Note though, that timeout timer starts at the point of `cf::future::timeout` inv
 ## Examples
 For the basic future/promise/async examples please refer to http://en.cppreference.com/w/cpp/thread#Futures.
 
-Async + then + then via executor
+### Async, then, then via executor
 ```c++
 cf::async_queued_executor executor;
 try {
@@ -118,6 +83,44 @@ std::is_same<
     });}))
 >::value == true;
 ```
+### Timeouts
+```c++
+cf::time_watcher tw;
+cf::async_thread_pool_executor executor(4);
+
+struct connect_timeout : std::domain_error { using std::domain_error::domain_error; };
+struct write_timeout : std::domain_error { using std::domain_error::domain_error; };
+struct read_timeout : std::domain_error { using std::domain_error::domain_error; };
+
+try {
+  auto client_future = cf::async([client = tcp_client()] () mutable {
+    client.connect("mysite.com:8001");
+    return client;  // client is moved from future to future. supposed to be a cheap operation
+  }).timeout(std::chrono::milliseconds(500), connect_timeout("Connect timeout"), tw).then(executor,
+  [](cf::future<tcp_client> client_future) mutable {
+    auto client = client_future.get();
+    client.write("GET /");
+    return client;
+  }).timeout(std::chrono::seconds(2), write_timeout("Write timeout"), tw).then(executor,
+  [](cf::future<tcp_client> client_future) mutable {
+    auto client = client_future.get();
+    client.read_until("/r/n/r/n");
+    return client;
+  }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
+  
+  std::cout << client_future.get().data() << std::endl;
+
+} catch (const connect_timeout& e) {
+  std::cerr << e.what() << std::endl;
+} catch (const write_timeout& e) {
+  std::cerr << e.what() << std::endl;
+} catch (const read_timeout& e) {
+  std::cerr << e.what() << std::endl; 
+}
+```
+Note though, that timeout timer starts at the point of `cf::future::timeout` invocation, i.e. all timeouts in the example above are scheduled almost at the same moment. Thus when calling `cf::future::timeout` second and subsequent times consider adding up approximate duration of the previous calls when choosing timeout values.
+
+### when_any, when_all
 `cf::when_any` and `cf::when_all` return `cf::future` which is ready when any or all of the input sequence futures become ready. These functions have iterator overloads and variadic overloads. Check [when_all](http://en.cppreference.com/w/cpp/experimental/when_all), [when_any](http://en.cppreference.com/w/cpp/experimental/when_any) for more details.
 ```c++
 std::vector<std::string> urls = {"url1.org", "url2.org", "url3.org"};
