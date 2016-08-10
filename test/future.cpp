@@ -20,6 +20,19 @@ struct test_struct {
   cf::unit bar1(cf::future<baz>) {return cf::unit(); };
 };
 
+template<typename Clock>
+void measure(const std::chrono::time_point<Clock>& start_point,
+             const char* prefix,
+             const char* message,
+             int expectedDuration) {
+  auto now = std::chrono::steady_clock::now();
+  auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+      now - start_point).count();
+
+  std::cout << prefix << message << diff << "ms (expected ~"
+            << expectedDuration << "ms)" << std::endl;
+}
+
 TEST_CASE("Types") {
   SECTION("Callable return type") {
     test_struct ts;
@@ -158,20 +171,12 @@ TEST_CASE("Future") {
         return f.get() * 5;
       });
     });
-    
-    std::cout << executors_mix_with_async_name << ": async + then calls took "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - start_point).count()
-              << "ms (expected ~ 0ms)" << std::endl;
-    
+
+    measure(start_point, executors_mix_with_async_name, 
+            ": async + then calls took ", 0);
     REQUIRE(f.get() == 125);
-    
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start_point);
-    
-    std::cout << executors_mix_with_async_name << ": f.get took " 
-              << diff.count() << "ms (expected ~ 25 ms)" 
-              << std::endl << std::endl;
+    measure(start_point, executors_mix_with_async_name, ": f.get() took ", 25);
+    std::cout << std::endl;
   }
 
   SECTION("Simple several threads") {
@@ -243,8 +248,6 @@ TEST_CASE("async") {
   
   const char* const tp_executor_2_name = "async.tp_executor_2";
 
-  // TODO: function for time measurement
-
   SECTION(tp_executor_2_name) {
     cf::async_thread_pool_executor executor(2);
     std::vector<cf::future<std::string>> v;
@@ -258,29 +261,13 @@ TEST_CASE("async") {
       }));
     }
 
-    auto populate_time = std::chrono::steady_clock::now();
-    auto populate_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-      populate_time - start_time).count();
-
-    std::cout << tp_executor_2_name << ": populating vector took "
-              << populate_diff << "ms (expected ~10ms)" << std::endl;
+    measure(start_time, tp_executor_2_name, ": populating vector took ", 10);
+    start_time = std::chrono::steady_clock::now();
     
-    //for (size_t i = 0; i < 10; ++i) {
-    //  REQUIRE(!v[i].is_ready());
-    //}
-    
-    //std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    for (size_t i = 0; i < 10; ++i) {
-      //REQUIRE(v[i].is_ready());
+    for (size_t i = 0; i < 10; ++i) 
       REQUIRE(v[i].get() == std::string("Hello") + std::to_string(i));
-    }
 
-    auto get_time = std::chrono::steady_clock::now();
-    auto get_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-      get_time - start_time).count();
-
-    std::cout << tp_executor_2_name << ": get all vector futures took "
-              << get_diff << "ms (expected ~100ms)" << std::endl << std::endl;
+    measure(start_time, tp_executor_2_name, ": get all vector futures took ", 100);
   }
 }
 
