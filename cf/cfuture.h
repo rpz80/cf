@@ -14,7 +14,7 @@
 #include <tuple>
 
 #if !defined(__clang__) && defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
-#include <cf/cpp14_type_traits.h>
+#include "cpp14_type_traits.h"
 #endif
 
 namespace cf {
@@ -66,8 +66,8 @@ private:
 // Future<void> and promise<void> are explicitly forbidden.
 // Use cf::unit instead.
 struct unit {};
-inline bool operator == (unit lhs, unit rhs) { return true; }
-inline bool operator != (unit lhs, unit rhs) { return false; }
+inline bool operator == (unit, unit) { return true; }
+inline bool operator != (unit, unit) { return false; }
 
 enum class status {
   ready,

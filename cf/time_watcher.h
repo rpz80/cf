@@ -6,7 +6,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <thread>
-#include <cf/common.h>
+#include "common.h"
 
 namespace cf {
 class time_watcher {
