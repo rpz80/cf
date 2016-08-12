@@ -13,7 +13,7 @@
 #include <iterator>
 #include <tuple>
 
-#if defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
+#if !defined(__clang__) && defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
 #include <cf/cpp14_type_traits.h>
 #endif
 
@@ -676,7 +676,7 @@ future<U> make_exceptional_future(std::exception_ptr p) {
   return future<U>(state);
 }
 
-#if defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
+#if !defined (__clang__) && defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
 template<typename F>
 future<detail::callable_ret_type<F>> async(F&& f) {
   using future_inner_type = detail::callable_ret_type<F>;
