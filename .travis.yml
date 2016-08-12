@@ -80,3 +80,12 @@ matrix:
         - cmake .. && make
         - bin/cf_test
 
+    - compiler: gcc 
+      script:
+        - mkdir build
+        - cd build
+        - export CXX=g++-5
+        - export CC=gcc-5
+        - cmake .. && make
+        - bin/cf_test
+
