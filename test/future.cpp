@@ -33,6 +33,8 @@ void measure(const std::chrono::time_point<Clock>& start_point,
             << expectedDuration << "ms)" << std::endl;
 }
 
+// TODO: get rid of timeout dependent tests. add expectations instead.
+
 TEST_CASE("Types") {
   SECTION("Callable return type") {
     test_struct ts;
