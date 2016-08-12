@@ -9,7 +9,7 @@ else()
     if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9)
       set(CMAKE_CXX_FLAGS "-std=c++14 -pedantic")
     else ()
-      set(CMAKE_CXX_FLAGS "-std=c++11 -pedantic")
+      set(CMAKE_CXX_FLAGS "-std=c++1y -pedantic")
     endif()
   endif()
 

@@ -10,6 +10,7 @@
 #include <vector>
 #include <iterator>
 #include <tuple>
+#include <cf/cpp14_type_traits.h>
 
 namespace cf {
 
@@ -670,6 +671,114 @@ future<U> make_exceptional_future(std::exception_ptr p) {
   return future<U>(state);
 }
 
+#if (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
+template<typename F>
+future<detail::callable_ret_type<F>> async(F&& f) {
+  using future_inner_type = detail::callable_ret_type<F>;
+  
+  promise<future_inner_type> p;
+  auto result = p.get_future();
+  
+  std::thread([p = std::move(p), f = std::forward<F>(f)] () mutable {
+    try {
+      p.set_value(std::forward<F>(f)());
+    } catch (...) {
+      p.set_exception(std::current_exception());
+    }
+  }).detach();
+  
+  return result;
+}
+
+template<typename F, typename Arg1>
+future<detail::callable_ret_type<F, Arg1>> async(F&& f, Arg1&& arg1) {
+  using future_inner_type = detail::callable_ret_type<F, Arg1>;
+  
+  promise<future_inner_type> p;
+  auto result = p.get_future();
+  
+  std::thread([p = std::move(p), f = std::forward<F>(f), arg1] () mutable {
+    try {
+      p.set_value(std::forward<F>(f)(arg1));
+    } catch (...) {
+      p.set_exception(std::current_exception());
+    }
+  }).detach();
+  
+  return result;
+}
+
+template<typename F, typename Arg1, typename Arg2>
+future<detail::callable_ret_type<F, Arg1, Arg2>> async(F&& f, Arg1&& arg1, Arg2&& arg2) {
+  using future_inner_type = detail::callable_ret_type<F, Arg1, Arg2>;
+  
+  promise<future_inner_type> p;
+  auto result = p.get_future();
+  
+  std::thread([p = std::move(p), f = std::forward<F>(f), arg1, arg2] () mutable {
+    try {
+      p.set_value(std::forward<F>(f)(arg1, arg2));
+    } catch (...) {
+      p.set_exception(std::current_exception());
+    }
+  }).detach();
+  
+  return result;
+}
+
+template<typename Executor, typename F>
+future<detail::callable_ret_type<F>> async(Executor& executor, F&& f) {
+  using future_inner_type = detail::callable_ret_type<F>;
+  
+  auto promise_ptr = std::make_shared<promise<future_inner_type>>();
+  auto result = promise_ptr->get_future();
+  executor.post([promise_ptr, f = std::forward<F>(f)] () mutable {
+    try {
+      promise_ptr->set_value(std::forward<F>(f)());
+    } catch (...) {
+      promise_ptr->set_exception(std::current_exception());
+    }
+  });
+  
+  return result;
+}
+
+template<typename Executor, typename F, typename Arg1>
+future<detail::callable_ret_type<F, Arg1>> async(Executor& executor, F&& f, Arg1&& arg1) {
+  using future_inner_type = detail::callable_ret_type<F, Arg1>;
+  
+  auto promise_ptr = std::make_shared<promise<future_inner_type>>();
+  auto result = promise_ptr->get_future();
+  executor.post([promise_ptr, f = std::forward<F>(f), arg1] () mutable {
+    try {
+      promise_ptr->set_value(std::forward<F>(f)(arg1));
+    } catch (...) {
+      promise_ptr->set_exception(std::current_exception());
+    }
+  });
+  
+  return result;
+}
+
+template<typename Executor, typename F, typename Arg1, typename Arg2>
+future<detail::callable_ret_type<F, Arg1, Arg2>> async(Executor& executor, F&& f, Arg1&& arg1, Arg2&& arg2) {
+  using future_inner_type = detail::callable_ret_type<F, Arg1, Arg2>;
+  
+  auto promise_ptr = std::make_shared<promise<future_inner_type>>();
+  auto result = promise_ptr->get_future();
+  executor.post([promise_ptr, f = std::forward<F>(f), arg1, arg2] () mutable {
+    try {
+      promise_ptr->set_value(std::forward<F>(f)(arg1, arg2));
+    } catch (...) {
+      promise_ptr->set_exception(std::current_exception());
+    }
+  });
+  
+  return result;
+}
+
+#else
+
 template<typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
@@ -704,6 +813,10 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
   
   return result;
 }
+
+#endif
+
+
 
 template<typename InputIt>
 auto when_all(InputIt first, InputIt last)
