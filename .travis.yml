@@ -29,6 +29,26 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
+            - llvm-toolchain-precise-3.6
+          packages:
+            - clang-3.6
+            - libc++-dev
+      before_install:
+        - sudo apt-get update -qq
+
+      script:
+        - mkdir build
+        - cd build
+        - export CXX=clang++-3.6
+        - export CC=clang-3.6
+        - cmake .. && make
+        - bin/cf_test
+
+    - compiler: clang
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
             - llvm-toolchain-precise-3.7
           packages:
             - clang-3.7
