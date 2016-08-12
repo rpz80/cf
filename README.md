@@ -4,7 +4,7 @@ This is an implementation of composable, continuing c++17 like [futures](http://
 
 Cf library has no dependencies except c++14 compliant standard library. Cf library comes with a constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
 
-Cf was tested on three major OS's. Minimum compiler requirements are: gcc-4.9, clang-3.7, vs2015.
+Cf was tested on three major OS's. Minimum compiler requirements are: gcc-4.8 (gcc-4.9 or above is strongly recommended), clang-3.7, vs2015.
 
 ## Executors
 Unlike standard futures Cf library implements the Executor concept. Executor may be an object of virtually any type which has `post(std::function<void()>)` member function. It enables `cf::future` continuations and callables passed to the `cf::async` be executed via separate thread/process/coroutine/etc execution context.

@@ -783,7 +783,7 @@ future<detail::callable_ret_type<F, Arg1, Arg2>> async(Executor& executor, F&& f
 }
 #endif
 
-#if defined (__clang__) || (defined (__GNUC__) && ((__GNUC__ == 4 && __GNUC_MINOR__ >= 9) || __GNUC__ >= 5))
+#if defined (__clang__) || defined(_MSC_VER) || (defined (__GNUC__) && ((__GNUC__ == 4 && __GNUC_MINOR__ >= 9) || __GNUC__ >= 5))
 template<typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
