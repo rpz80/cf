@@ -10,7 +10,10 @@
 #include <vector>
 #include <iterator>
 #include <tuple>
+
+#if defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
 #include <cf/cpp14_type_traits.h>
+#endif
 
 namespace cf {
 
@@ -671,7 +674,7 @@ future<U> make_exceptional_future(std::exception_ptr p) {
   return future<U>(state);
 }
 
-#if (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
+#if defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
 template<typename F>
 future<detail::callable_ret_type<F>> async(F&& f) {
   using future_inner_type = detail::callable_ret_type<F>;
@@ -776,9 +779,9 @@ future<detail::callable_ret_type<F, Arg1, Arg2>> async(Executor& executor, F&& f
   
   return result;
 }
+#endif
 
-#else
-
+#if defined (_clang_) || (defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ >= 9))
 template<typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
@@ -813,7 +816,6 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
   
   return result;
 }
-
 #endif
 
 

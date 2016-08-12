@@ -1,7 +1,5 @@
 #pragma once
 
-#if (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
-
 #include <type_traits>
 
 namespace std {
@@ -15,4 +13,3 @@ template<bool B, typename T, typename U>
 using conditional_t = typename conditional<B,T,U>::type;
 }
 
-#endif
