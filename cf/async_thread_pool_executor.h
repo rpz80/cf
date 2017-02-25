@@ -28,7 +28,7 @@ class async_thread_pool_executor {
   private:
     std::thread thread_;
     mutable std::mutex m_;
-    std::atomic<bool> need_stop_ = {false};
+    bool need_stop_ = {false};
     std::atomic<bool> has_task_ = {false};
     std::condition_variable start_cond_;
     detail::task_type task_;
