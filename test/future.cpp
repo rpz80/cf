@@ -193,6 +193,13 @@ TEST_CASE("Future") {
 }
 
 TEST_CASE("async") {
+  SECTION("loop") {
+    for (size_t i = 0; i < 2000; ++i) {
+      cf::async([]{ return 1; })
+        .then([](cf::future<int>){ return 2; });
+    }
+  }
+
   SECTION("in a row") {
     cf::async_queued_executor executor;
     auto f = cf::async([] {

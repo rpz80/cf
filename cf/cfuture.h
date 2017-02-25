@@ -53,6 +53,7 @@ public:
   movable_func& operator = (movable_func<R(Args...)>&& other) = default;
   movable_func(const movable_func<R(Args...)>& other) = delete;
   movable_func& operator = (const movable_func<R(Args...)>& other) = delete;
+  bool empty() const { return !held_; }
 
   R operator() (Args... args) const {
     return held_->operator()(args...);
@@ -158,16 +159,27 @@ public:
   void set_ready(std::unique_lock<std::mutex>& lock) {
     satisfied_ = true;
     cond_.notify_all();
+    if (cb_.empty())
+      return;
+    bool need_execute = !executed_;
+    if (!need_execute)
+      return;
+    executed_ = true;
     lock.unlock();
-    cb_();
+    if (need_execute)
+      cb_();
   }
 
   template<typename F>
   void set_callback(F&& f) {
     std::unique_lock<std::mutex> lock(mutex_);
     cb_ = std::forward<F>(f);
+    bool need_execute = satisfied_ && !executed_;
+    if (!need_execute)
+      return;
+    executed_ = true;
     lock.unlock();
-    if (satisfied_)
+    if (need_execute)
       cb_();
   }
 
@@ -218,9 +230,10 @@ protected:
 protected:
   mutable std::mutex mutex_;
   mutable std::condition_variable cond_;
-  std::atomic<bool> satisfied_;
+  bool satisfied_;
+  bool executed_;
   std::exception_ptr exception_ptr_;
-  cb_type cb_ = []() {};
+  cb_type cb_; 
   timeout_state timeout_state_ = timeout_state::not_set;
   std::mutex timeout_mutex_;
 };
