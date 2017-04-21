@@ -474,15 +474,17 @@ future<T>::then_impl(F&& f) {
   using R = typename detail::future_held_type<
     detail::then_arg_ret_type<T, F>
   >::type;
+  using S = typename std::remove_reference<decltype(*this->state_)>::type;
   promise<R> p;
   future<R> ret = p.get_future();
   set_callback([p = std::move(p), f = std::forward<F>(f), 
-               state = this->state_->shared_from_this()] () mutable {
-    if (state->has_exception())
-      p.set_exception(state->get_exception());
+               state = std::weak_ptr<S>(this->state_->shared_from_this())] () mutable {
+    auto sp_state = state.lock();
+    if (sp_state->has_exception())
+      p.set_exception(sp_state->get_exception());
     else {
       try {
-        auto inner_f = f(cf::make_ready_future<T>(state->get_value()));
+        auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
         p.set_value(inner_f.get());
       } catch (...) {
         p.set_exception(std::current_exception());
@@ -504,15 +506,17 @@ typename std::enable_if<
 >::type
 future<T>::then_impl(F&& f) {
   using R = detail::then_arg_ret_type<T, F>;
+  using S = typename std::remove_reference<decltype(*this->state_)>::type;
   promise<R> p;
   future<R> ret = p.get_future();
   set_callback([p = std::move(p), f = std::forward<F>(f),
-               state = this->state_->shared_from_this()] () mutable {
-    if (state->has_exception())
-      p.set_exception(state->get_exception());
+               state = std::weak_ptr<S>(this->state_->shared_from_this())] () mutable {
+    auto sp_state = state.lock();
+    if (sp_state->has_exception())
+      p.set_exception(sp_state->get_exception());
     else {
       try {
-        p.set_value(f(cf::make_ready_future<T>(state->get_value())));
+        p.set_value(f(cf::make_ready_future<T>(sp_state->get_value())));
       } catch (...) {
         p.set_exception(std::current_exception());
       }
@@ -535,16 +539,18 @@ future<T>::then_impl(F&& f, Executor& executor) {
   using R = typename detail::future_held_type<
     detail::then_arg_ret_type<T, F>
   >::type;
+  using S = typename std::remove_reference<decltype(*this->state_)>::type;
   promise<R> p;
   future<R> ret = p.get_future();
   set_callback([p = std::move(p), f = std::forward<F>(f),
-               state = this->state_->shared_from_this(), &executor] () mutable {
-    if (state->has_exception())
-      p.set_exception(state->get_exception());
+               state = std::weak_ptr<S>(this->state_->shared_from_this()), &executor] () mutable {
+    auto sp_state = state.lock();
+    if (sp_state->has_exception())
+      p.set_exception(sp_state->get_exception());
     else {
-      executor.post([&p, state, f = std::forward<F>(f)] () mutable {
+      executor.post([&p, sp_state = sp_state, f = std::forward<F>(f)] () mutable {
         try {
-          auto inner_f = f(cf::make_ready_future<T>(state->get_value()));
+          auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
           p.set_value(inner_f.get());
         } catch (...) {
           p.set_exception(std::current_exception());
@@ -567,16 +573,18 @@ typename std::enable_if<
 >::type
 future<T>::then_impl(F&& f, Executor& executor) {
   using R = detail::then_arg_ret_type<T, F>;
+  using S = typename std::remove_reference<decltype(*this->state_)>::type;
   promise<R> p;
   future<R> ret = p.get_future();
   set_callback([p = std::move(p), f = std::forward<F>(f),
-               state = this->state_->shared_from_this(), &executor] () mutable {
-    if (state->has_exception())
-      p.set_exception(state->get_exception());
+               state = std::weak_ptr<S>(this->state_->shared_from_this()), &executor] () mutable {
+    auto sp_state = state.lock();
+    if (sp_state->has_exception())
+      p.set_exception(sp_state->get_exception());
     else {
-      executor.post([&p, state, f = std::forward<F>(f)] () mutable {
+      executor.post([&p, sp_state, f = std::forward<F>(f)] () mutable {
         try {
-          p.set_value(f(cf::make_ready_future<T>(state->get_value())));
+          p.set_value(f(cf::make_ready_future<T>(sp_state->get_value())));
         } catch (...) {
           p.set_exception(std::current_exception());
         }
