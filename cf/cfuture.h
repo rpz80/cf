@@ -134,7 +134,8 @@ class shared_state_base {
 public:
   ~shared_state_base() {}
   shared_state_base()
-    : satisfied_(false)
+    : satisfied_(false),
+      executed_(false)
   {}
 
   void wait() const {
