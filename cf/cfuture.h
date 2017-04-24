@@ -486,7 +486,14 @@ future<T>::then_impl(F&& f) {
     else {
       try {
         auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
-        p.set_value(inner_f.get());
+        inner_f.then([p = std::move(p)] (cf::future<R> f) mutable {
+          try {
+            p.set_value(f.get());
+          } catch (...) {
+            p.set_exception(std::current_exception());
+          }
+          return cf::unit();
+        });
       } catch (...) {
         p.set_exception(std::current_exception());
       }
@@ -552,7 +559,14 @@ future<T>::then_impl(F&& f, Executor& executor) {
       executor.post([&p, sp_state = sp_state, f = std::forward<F>(f)] () mutable {
         try {
           auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
-          p.set_value(inner_f.get());
+          inner_f.then([p = std::move(p)] (cf::future<R> f) mutable {
+            try {
+              p.set_value(f.get());
+            } catch (...) {
+              p.set_exception(std::current_exception());
+            }
+            return cf::unit();
+          });
         } catch (...) {
           p.set_exception(std::current_exception());
         }
