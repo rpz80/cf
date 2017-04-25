@@ -70,7 +70,7 @@ struct unit {};
 inline bool operator == (unit, unit) { return true; }
 inline bool operator != (unit, unit) { return false; }
 
-enum class status {
+enum class future_status {
   ready,
   timeout
 };
@@ -144,17 +144,17 @@ public:
   }
 
   template<typename Rep, typename Period>
-  status wait_for(const std::chrono::duration<Rep, Period>& timeout) const {
+  future_status wait_for(const std::chrono::duration<Rep, Period>& timeout) const {
     std::unique_lock<std::mutex> lock(mutex_);
     cond_.wait_for(lock, timeout, [this] { return satisfied_ == true; });
-    return satisfied_ ? status::ready : status::timeout;
+    return satisfied_ ? future_status::ready : future_status::timeout;
   }
 
-  template<typename Rep, typename Period>
-  status wait_until(const std::chrono::duration<Rep, Period>& timeout) const {
+  template<typename Clock, typename Duration>
+  future_status wait_until(const std::chrono::time_point<Clock, Duration>& timepoint) const {
     std::unique_lock<std::mutex> lock(mutex_);
-    cond_.wait_until(lock, timeout, [this] { return satisfied_ == true; });
-    return satisfied_ ? status::ready : status::timeout;
+    cond_.wait_until(lock, timepoint, [this] { return satisfied_ == true; });
+    return satisfied_ ? future_status::ready : future_status::timeout;
   }
 
   void set_ready(std::unique_lock<std::mutex>& lock) {
@@ -372,15 +372,15 @@ future<T> timeout(std::chrono::duration<Rep, Period> duration,
   }
 
   template<typename Rep, typename Period>
-  void wait_for(const std::chrono::duration<Rep, Period>& timeout) {
+  cf::future_status wait_for(const std::chrono::duration<Rep, Period>& timeout) {
     check_state(state_);
-    state_.wait_for(timeout);
+    return state_->wait_for(timeout);
   }
 
-  template<typename Rep, typename Period>
-  void wait_until(const std::chrono::duration<Rep, Period>& timeout) {
+  template<typename Clock, typename Duration>
+  cf::future_status wait_until(const std::chrono::time_point<Clock, Duration>& timepoint) {
     check_state(state_);
-    state_.wait_until(timeout);
+    return state_->wait_until(timepoint);
   }
 
 private:

@@ -153,6 +153,38 @@ TEST_CASE("Future") {
       }
     } // set exception
 
+    SECTION("wait_for") {
+      auto f = cf::async([](){
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        return cf::unit();
+      });
+
+      auto status = f.wait_for(std::chrono::milliseconds(5));
+      REQUIRE(status == cf::future_status::timeout);
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(60));
+      
+      status = f.wait_for(std::chrono::milliseconds(20000));
+      REQUIRE(status == cf::future_status::ready);
+    }
+
+    SECTION("wait_until") {
+      auto f = cf::async([](){
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        return cf::unit();
+      });
+
+      auto status = f.wait_until(std::chrono::steady_clock::now() + 
+                                 std::chrono::milliseconds(5));
+      REQUIRE(status == cf::future_status::timeout);
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(60));
+
+      status = f.wait_until(std::chrono::steady_clock::now() + 
+                            std::chrono::milliseconds(1));
+      REQUIRE(status == cf::future_status::ready);
+    }
+
   }
 
   const char* const executors_mix_with_async_name = "executors_mix_with_async";
