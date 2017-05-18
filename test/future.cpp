@@ -122,7 +122,7 @@ TEST_CASE("Future") {
           REQUIRE(false);
         } catch (const cf::future_error& error) {
           REQUIRE(error.ecode() == cf::errc::promise_already_satisfied);
-          REQUIRE(error.what() == 
+          REQUIRE(error.what() ==
             cf::errc_string(cf::errc::promise_already_satisfied));
         }
       }
@@ -163,7 +163,7 @@ TEST_CASE("Future") {
       REQUIRE(status == cf::future_status::timeout);
 
       std::this_thread::sleep_for(std::chrono::milliseconds(60));
-      
+
       status = f.wait_for(std::chrono::milliseconds(20000));
       REQUIRE(status == cf::future_status::ready);
     }
@@ -174,13 +174,13 @@ TEST_CASE("Future") {
         return cf::unit();
       });
 
-      auto status = f.wait_until(std::chrono::steady_clock::now() + 
+      auto status = f.wait_until(std::chrono::steady_clock::now() +
                                  std::chrono::milliseconds(5));
       REQUIRE(status == cf::future_status::timeout);
 
       std::this_thread::sleep_for(std::chrono::milliseconds(60));
 
-      status = f.wait_until(std::chrono::steady_clock::now() + 
+      status = f.wait_until(std::chrono::steady_clock::now() +
                             std::chrono::milliseconds(1));
       REQUIRE(status == cf::future_status::ready);
     }
@@ -192,7 +192,7 @@ TEST_CASE("Future") {
   SECTION(executors_mix_with_async_name) {
     cf::async_thread_pool_executor executor(2);
     auto start_point = std::chrono::steady_clock::now();
-    
+
     auto f = cf::async([]{
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return 5;
@@ -206,7 +206,7 @@ TEST_CASE("Future") {
       });
     });
 
-    measure(start_point, executors_mix_with_async_name, 
+    measure(start_point, executors_mix_with_async_name,
             ": async + then calls took ", 0);
     REQUIRE(f.get() == 125);
     measure(start_point, executors_mix_with_async_name, ": f.get() took ", 25);
@@ -247,23 +247,23 @@ TEST_CASE("async") {
     REQUIRE(!f.is_ready());
     REQUIRE(f.get() == "Hello futures world!");
   }
-  
+
   SECTION("async simple with args") {
-    auto f = cf::async([](int i) { 
+    auto f = cf::async([](int i) {
       std::this_thread::sleep_for(std::chrono::milliseconds(300));
-      return i; 
+      return i;
     }, 42);
     REQUIRE(f.get() == 42);
   }
 
   SECTION("async simple without args") {
-    auto f = cf::async([]() { 
+    auto f = cf::async([]() {
       std::this_thread::sleep_for(std::chrono::milliseconds(300));
-      return 42; 
+      return 42;
     });
     REQUIRE(f.get() == 42);
   }
-  
+
   SECTION("simple") {
     auto f = cf::async([] {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -274,7 +274,7 @@ TEST_CASE("async") {
     REQUIRE(f.is_ready());
     REQUIRE(f.get() == "Hello");
   }
-  
+
   SECTION("tp executor") {
     cf::async_thread_pool_executor executor(1);
     auto f = cf::async(executor, [] {
@@ -286,13 +286,13 @@ TEST_CASE("async") {
     REQUIRE(f.is_ready());
     REQUIRE(f.get() == "Hello");
   }
-  
+
   const char* const tp_executor_2_name = "async.tp_executor_2";
 
   SECTION(tp_executor_2_name) {
     cf::async_thread_pool_executor executor(2);
     std::vector<cf::future<std::string>> v;
-    
+
     auto start_time = std::chrono::steady_clock::now();
 
     for (size_t i = 0; i < 10; ++i) {
@@ -304,8 +304,8 @@ TEST_CASE("async") {
 
     measure(start_time, tp_executor_2_name, ": populating vector took ", 0);
     start_time = std::chrono::steady_clock::now();
-    
-    for (size_t i = 0; i < 10; ++i) 
+
+    for (size_t i = 0; i < 10; ++i)
       REQUIRE(v[i].get() == std::string("Hello") + std::to_string(i));
 
     measure(start_time, tp_executor_2_name, ": get all vector futures took ", 100);
@@ -331,7 +331,7 @@ TEST_CASE("Exceptions") {
       }
     }
   }
-  
+
   SECTION("exception fallthrough in then") {
     auto f = cf::async([] {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -352,7 +352,7 @@ TEST_CASE("Exceptions") {
       REQUIRE(e.what() == std::string("Exception"));
     }
   }
-  
+
   SECTION("exception fallthrough in then via executor") {
     cf::async_thread_pool_executor executor(1);
     auto f = cf::async(executor, [] {
@@ -380,21 +380,21 @@ TEST_CASE("Time watcher") {
   cf::time_watcher tw;
   std::vector<std::chrono::time_point<std::chrono::steady_clock>> tp_vec;
   auto start_point = std::chrono::steady_clock::now();
-  
+
   SECTION("1") {
     tw.add([&tp_vec] {
       tp_vec.push_back(std::chrono::steady_clock::now());
     }, std::chrono::milliseconds(100));
-    
+
     tw.add([&tp_vec] {
       tp_vec.push_back(std::chrono::steady_clock::now());
     }, std::chrono::milliseconds(200));
-    
+
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
     REQUIRE(tp_vec.size() == 2);
     REQUIRE(tp_vec[0] - start_point < std::chrono::milliseconds(110));
     REQUIRE(tp_vec[0] - start_point > std::chrono::milliseconds(90));
-    
+
     REQUIRE(tp_vec[1] - start_point < std::chrono::milliseconds(210));
     REQUIRE(tp_vec[1] - start_point > std::chrono::milliseconds(190));
   }
@@ -403,16 +403,16 @@ TEST_CASE("Time watcher") {
     tw.add([&tp_vec] {
       tp_vec.push_back(std::chrono::steady_clock::now());
     }, std::chrono::milliseconds(100));
-    
+
     tw.add([&tp_vec] {
       tp_vec.push_back(std::chrono::steady_clock::now());
     }, std::chrono::milliseconds(100));
-    
+
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     REQUIRE(tp_vec.size() == 2);
     REQUIRE(tp_vec[0] - start_point < std::chrono::milliseconds(110));
     REQUIRE(tp_vec[0] - start_point > std::chrono::milliseconds(90));
-    
+
     REQUIRE(tp_vec[0] - start_point < std::chrono::milliseconds(110));
     REQUIRE(tp_vec[0] - start_point > std::chrono::milliseconds(90));
   }
@@ -423,12 +423,12 @@ TEST_CASE("Time watcher. Future timeout") {
     struct connect_timeout : std::runtime_error { using std::runtime_error::runtime_error; };
     struct write_timeout : std::runtime_error {};
     struct read_timeout : std::runtime_error {};
-    
+
     connect_timeout ct("");
 
     cf::time_watcher tw;
     std::runtime_error timeout_error("timeout");
-    
+
     try {
       cf::async([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -439,7 +439,7 @@ TEST_CASE("Time watcher. Future timeout") {
       REQUIRE(e.what() == std::string("timeout"));
     }
   }
-  
+
   SECTION("2") {
     cf::time_watcher tw;
     cf::async_thread_pool_executor executor(4);
@@ -455,32 +455,32 @@ TEST_CASE("Time watcher. Future timeout") {
         : connect_time(connect_time),
           write_time(write_time),
           read_time(read_time) {}
-      
+
       tcp_client() = default;
       tcp_client(tcp_client&& other) = default;
       tcp_client& operator=(tcp_client&& other) = default;
-      
+
       void connect(const char*) {
         std::this_thread::sleep_for(std::chrono::milliseconds(connect_time));
       }
-      
+
       void write(const char*) {
         std::this_thread::sleep_for(std::chrono::milliseconds(write_time));
       }
-      
+
       void read_until(const char*) {
         std::this_thread::sleep_for(std::chrono::milliseconds(read_time));
       }
-      
+
       std::string data() const {
         return "Some data";
       }
-      
+
       std::chrono::milliseconds connect_time;
       std::chrono::milliseconds write_time;
       std::chrono::milliseconds read_time;
     };
-    
+
     SECTION("connect timeout") {
       tcp_client client(std::chrono::milliseconds(1000),
                         std::chrono::milliseconds(100),
@@ -500,7 +500,7 @@ TEST_CASE("Time watcher. Future timeout") {
           client.read_until("/r/n/r/n");
           return client;
         }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
-        
+
         std::cout << client_future.get().data() << std::endl;
         REQUIRE(false);
 
@@ -511,10 +511,10 @@ TEST_CASE("Time watcher. Future timeout") {
         std::cerr << e.what() << std::endl;
       } catch (const read_timeout& e) {
         REQUIRE(false);
-        std::cerr << e.what() << std::endl; 
+        std::cerr << e.what() << std::endl;
       }
     }
-    
+
     SECTION("connect timeout T*") {
       tcp_client client(std::chrono::milliseconds(1000),
                         std::chrono::milliseconds(100),
@@ -534,7 +534,7 @@ TEST_CASE("Time watcher. Future timeout") {
           client->read_until("/r/n/r/n");
           return client;
         }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
-        
+
         std::cout << client_future.get()->data() << std::endl;
         REQUIRE(false);
 
@@ -545,10 +545,10 @@ TEST_CASE("Time watcher. Future timeout") {
         std::cerr << e.what() << std::endl;
       } catch (const read_timeout& e) {
         REQUIRE(false);
-        std::cerr << e.what() << std::endl; 
+        std::cerr << e.what() << std::endl;
       }
     }
-    
+
     SECTION("write timeout") {
       tcp_client client(std::chrono::milliseconds(100),
                         std::chrono::milliseconds(400),
@@ -568,7 +568,7 @@ TEST_CASE("Time watcher. Future timeout") {
           client.read_until("/r/n/r/n");
           return client;
         }).timeout(std::chrono::seconds(2), read_timeout("Read timeout"), tw);
-        
+
         std::cout << client_future.get().data() << std::endl;
         REQUIRE(false);
 
@@ -579,10 +579,10 @@ TEST_CASE("Time watcher. Future timeout") {
         REQUIRE(e.what() == std::string("Write timeout"));
       } catch (const read_timeout& e) {
         REQUIRE(false);
-        std::cerr << e.what() << std::endl; 
+        std::cerr << e.what() << std::endl;
       }
     }
-    
+
     SECTION("read timeout") {
       tcp_client client(std::chrono::milliseconds(100),
                         std::chrono::milliseconds(100),
@@ -602,7 +602,7 @@ TEST_CASE("Time watcher. Future timeout") {
           client.read_until("/r/n/r/n");
           return client;
         }).timeout(std::chrono::milliseconds(200), read_timeout("Read timeout"), tw);
-        
+
         std::cout << client_future.get().data() << std::endl;
         REQUIRE(false);
 
@@ -615,7 +615,7 @@ TEST_CASE("Time watcher. Future timeout") {
         REQUIRE(e.what() == std::string("Read timeout"));
       }
     }
-    
+
     SECTION("no timeout") {
       tcp_client client(std::chrono::milliseconds(100),
                         std::chrono::milliseconds(100),
@@ -635,7 +635,7 @@ TEST_CASE("Time watcher. Future timeout") {
           client.read_until("/r/n/r/n");
           return client;
         }).timeout(std::chrono::milliseconds(700), read_timeout("Read timeout"), tw);
-        
+
         auto client_data = client_future.get().data();
         REQUIRE(client_data == "Some data");
         std::cout << client_data << std::endl;
@@ -659,7 +659,7 @@ TEST_CASE("Make future functions") {
     REQUIRE(f.valid());
     REQUIRE(f.get() == 42);
   }
-  
+
   SECTION("Make excetion")
   {
     cf::future<int> f = cf::make_exceptional_future<int>(
@@ -714,7 +714,7 @@ TEST_CASE("Executors") {
   {
     cf::async_queued_executor executor;
     int counter = 0;
-    
+
     auto result = cf::async([&counter] {
       ++counter;
       return 42;
@@ -726,7 +726,7 @@ TEST_CASE("Executors") {
       ++counter;
       return f.get() + " world!";
     });
-    
+
     REQUIRE(result.get() == "Hello world!");
     REQUIRE(counter == 3);
   }
@@ -781,7 +781,7 @@ TEST_CASE("Executors") {
     SECTION("future") {
       cf::async_thread_pool_executor executor(5);
       cf::future<int> f = cf::make_ready_future(0);
-      
+
       for (size_t i = 0; i < 10; ++i) {
         f = f.then(executor, [i](cf::future<int> f) {
           std::this_thread::sleep_for(std::chrono::milliseconds(5 * (i + 3)));
@@ -790,7 +790,7 @@ TEST_CASE("Executors") {
           return ++val;
         });
       }
-      
+
       REQUIRE(f.get() == 10);
     }
   }
@@ -820,21 +820,21 @@ TEST_CASE("When all") {
           return (int)i;
         }));
       }
-      
+
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
       REQUIRE(vec[0].is_ready());
-      
+
       for (size_t i = 1; i < size; ++i)
         REQUIRE(!vec[i].is_ready());
-      
+
       auto when_all_result_future = cf::when_all(vec.begin(), vec.end());
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      
+
       REQUIRE(!when_all_result_future.is_ready());
-      
+
       auto when_all_result = when_all_result_future.get();
       REQUIRE(when_all_result.size() == size);
-      
+
       for (size_t i = 0; i < size; ++i)
         REQUIRE(when_all_result[i].get() == i);
     }
@@ -853,7 +853,7 @@ TEST_CASE("When all") {
 
   SECTION("Simple tuple") {
     auto when_all_result = cf::when_all(
-      cf::async([]{ return 1; }), 
+      cf::async([]{ return 1; }),
       cf::async([]{ return cf::unit(); })).get();
     REQUIRE(std::get<0>(when_all_result).get() == 1);
     REQUIRE(std::get<1>(when_all_result).get() == cf::unit());
@@ -872,7 +872,7 @@ TEST_CASE("When any") {
           return (int)i;
         }));
       }
-      
+
       auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
       REQUIRE(when_any_result.sequence.size() == size);
       REQUIRE(when_any_result.index == 4);
@@ -884,7 +884,7 @@ TEST_CASE("When any") {
       for (size_t i = 0; i < size; ++i) {
         vec.push_back(cf::make_ready_future((int)i));
       }
-      
+
       auto when_any_result= cf::when_any(vec.begin(), vec.end()).get();
       REQUIRE(when_any_result.sequence.size() == size);
       REQUIRE(when_any_result.index == 0);
@@ -892,55 +892,55 @@ TEST_CASE("When any") {
       REQUIRE(when_any_result.sequence[0].get() == 0);
     }
   }
-  
+
   SECTION("Vector") {
     const size_t size = 20;
     std::vector<cf::future<int>> vec;
     cf::async_thread_pool_executor executor(2);
-    
+
     for (size_t i = 0; i < size; ++i) {
       vec.push_back(cf::async(executor, [i, size] {
         std::this_thread::sleep_for(std::chrono::milliseconds((i+1) * 50));
         return (int)i;
       }));
     }
-    
+
     for (size_t i = 0; i < size; ++i) {
       auto when_any_result = cf::when_any(vec.begin(), vec.end()).get();
       REQUIRE(when_any_result.sequence[0].is_ready());
       //REQUIRE(when_any_result.sequence[0].get() == i);
-      
+
       vec.clear();
-      
+
       for (size_t j = 1; j < when_any_result.sequence.size(); ++j) {
         REQUIRE(!when_any_result.sequence[j].is_ready());
         vec.push_back(std::move(when_any_result.sequence[j]));
       }
     }
   }
-  
+
   SECTION("tuple async") {
     auto when_any_result = cf::when_any(
-      cf::async([] { 
+      cf::async([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        return 1; 
-      }), 
-      cf::async([] { 
+        return 1;
+      }),
+      cf::async([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        return cf::unit(); 
+        return cf::unit();
       })).get();
-    
+
     REQUIRE(when_any_result.index == 1);
     REQUIRE(std::get<1>(when_any_result.sequence).get() == cf::unit());
   }
-  
+
   SECTION("tuple ready") {
     auto when_any_result = cf::when_any(cf::make_ready_future(42),
-      cf::async([] { 
+      cf::async([] {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        return cf::unit(); 
+        return cf::unit();
       })).get();
-    
+
     REQUIRE(when_any_result.index == 0);
     REQUIRE(std::get<0>(when_any_result.sequence).get() == 42);
   }
@@ -948,7 +948,7 @@ TEST_CASE("When any") {
   SECTION("When w executors") {
     cf::async_queued_executor queue_executor;
     cf::async_thread_pool_executor tp_executor(1);
-    
+
     auto when_any_result_future = cf::when_any(
       cf::make_ready_future<std::string>("Hello ").then(queue_executor,
         [] (cf::future<std::string> f) mutable {
@@ -969,20 +969,20 @@ TEST_CASE("When any") {
           std::this_thread::sleep_for(std::chrono::milliseconds(75));
           return f.get() + "world!";
         }));
-    
+
     REQUIRE(!when_any_result_future.is_ready());
     auto when_any_result = when_any_result_future.get();
     REQUIRE(std::get<1>(when_any_result.sequence).is_ready() == false);
-    
+
     REQUIRE(when_any_result.index == 0);
     REQUIRE(std::get<0>(when_any_result.sequence).get() ==
             "Hello composable futures!");
-    
+
     auto next_when_any_result = cf::when_any(
       std::move(std::get<1>(when_any_result.sequence))).get();
-    
+
     REQUIRE(next_when_any_result.index == 0);
     REQUIRE(std::get<0>(next_when_any_result.sequence).get() ==
-            "Hello composable futures world!");    
+            "Hello composable futures world!");
   }
 }
