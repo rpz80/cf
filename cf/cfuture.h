@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 
 #include <mutex>
 #include <thread>
@@ -21,7 +21,7 @@ namespace cf {
 
 namespace detail {
 
-// We can't use std::function as continuation holder, as it 
+// We can't use std::function as continuation holder, as it
 // requires held type to be copyable. So here is simple move-only
 // callable wrapper.
 template<typename F>
@@ -215,16 +215,16 @@ public:
                      errc_string(errc::broken_promise)));
     set_ready(lock);
   }
-  
+
   std::mutex& get_timeout_mutex() { return timeout_mutex_; }
-  
+
   timeout_state expired() const { return timeout_state_; }
   void expired(timeout_state state) {timeout_state_ = state; }
 
 protected:
   void throw_if_satisfied() {
     if (satisfied_)
-      throw future_error(errc::promise_already_satisfied, 
+      throw future_error(errc::promise_already_satisfied,
                          errc_string(errc::promise_already_satisfied));
   }
 
@@ -234,7 +234,7 @@ protected:
   bool satisfied_;
   bool executed_;
   std::exception_ptr exception_ptr_;
-  cb_type cb_; 
+  cb_type cb_;
   timeout_state timeout_state_ = timeout_state::not_set;
   std::mutex timeout_mutex_;
 };
@@ -351,7 +351,7 @@ public:
 
   template<typename F>
   detail::then_ret_type<T, F> then(F&& f);
-  
+
 template<typename Rep, typename Period, typename TimeWatcher, typename Exception>
 future<T> timeout(std::chrono::duration<Rep, Period> duration,
                   const Exception& exception,
@@ -478,7 +478,7 @@ future<T>::then_impl(F&& f) {
   using S = typename std::remove_reference<decltype(*this->state_)>::type;
   promise<R> p;
   future<R> ret = p.get_future();
-  set_callback([p = std::move(p), f = std::forward<F>(f), 
+  set_callback([p = std::move(p), f = std::forward<F>(f),
                state = std::weak_ptr<S>(this->state_->shared_from_this())] () mutable {
     auto sp_state = state.lock();
     if (sp_state->has_exception())
@@ -556,19 +556,20 @@ future<T>::then_impl(F&& f, Executor& executor) {
     if (sp_state->has_exception())
       p.set_exception(sp_state->get_exception());
     else {
-      executor.post([&p, sp_state = sp_state, f = std::forward<F>(f), &executor] () mutable {
+      auto promise_ptr = std::make_shared<promise<R>>(std::move(p));
+      executor.post([promise_ptr, sp_state = sp_state, f = std::forward<F>(f), &executor] () mutable {
         try {
           auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
-          inner_f.then(executor, [p = std::move(p)] (cf::future<R> f) mutable {
+          inner_f.then(executor, [promise_ptr] (cf::future<R> f) mutable {
             try {
-              p.set_value(f.get());
+              promise_ptr->set_value(f.get());
             } catch (...) {
-              p.set_exception(std::current_exception());
+              promise_ptr->set_exception(std::current_exception());
             }
             return cf::unit();
           });
         } catch (...) {
-          p.set_exception(std::current_exception());
+          promise_ptr->set_exception(std::current_exception());
         }
       });
     }
@@ -597,11 +598,19 @@ future<T>::then_impl(F&& f, Executor& executor) {
     if (sp_state->has_exception())
       p.set_exception(sp_state->get_exception());
     else {
-      executor.post([&p, sp_state, f = std::forward<F>(f)] () mutable {
+      struct local_state {
+        promise<R> p;
+        F f;
+        local_state(promise<R> p, F f)
+          : p(std::move(p)),
+            f(std::move(f)) {}
+      };
+      auto lstate = std::make_shared<local_state>(std::move(p), std::move(f));
+      executor.post([sp_state, lstate] () mutable {
         try {
-          p.set_value(f(cf::make_ready_future<T>(sp_state->get_value())));
+          lstate->p.set_value(lstate->f(cf::make_ready_future<T>(sp_state->get_value())));
         } catch (...) {
-          p.set_exception(std::current_exception());
+          lstate->p.set_exception(std::current_exception());
         }
       });
     }
@@ -617,7 +626,7 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
                              TimeWatcher& watcher) {
   auto promise_ptr = std::make_shared<promise<T>>();
   future<T> ret = promise_ptr->get_future();
-  
+
   watcher.add([promise_ptr,
                state = this->state_->shared_from_this(),
                exception] () mutable {
@@ -627,7 +636,7 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
     state->expired(timeout_state::expired);
     promise_ptr->set_exception(std::make_exception_ptr(exception));
   }, duration);
-  
+
   set_callback([promise_ptr, state = this->state_->shared_from_this()] () mutable {
     std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
     if (state->expired() == timeout_state::expired)
@@ -639,7 +648,7 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
       promise_ptr->set_value(state->get_value());
     }
   });
-  
+
   return ret;
 }
 
@@ -716,10 +725,10 @@ future<U> make_exceptional_future(std::exception_ptr p) {
 template<typename F>
 future<detail::callable_ret_type<F>> async(F&& f) {
   using future_inner_type = detail::callable_ret_type<F>;
-  
+
   promise<future_inner_type> p;
   auto result = p.get_future();
-  
+
   std::thread([p = std::move(p), f = std::forward<F>(f)] () mutable {
     try {
       p.set_value(std::forward<F>(f)());
@@ -727,17 +736,17 @@ future<detail::callable_ret_type<F>> async(F&& f) {
       p.set_exception(std::current_exception());
     }
   }).detach();
-  
+
   return result;
 }
 
 template<typename F, typename Arg1>
 future<detail::callable_ret_type<F, Arg1>> async(F&& f, Arg1&& arg1) {
   using future_inner_type = detail::callable_ret_type<F, Arg1>;
-  
+
   promise<future_inner_type> p;
   auto result = p.get_future();
-  
+
   std::thread([p = std::move(p), f = std::forward<F>(f), arg1] () mutable {
     try {
       p.set_value(std::forward<F>(f)(arg1));
@@ -745,17 +754,17 @@ future<detail::callable_ret_type<F, Arg1>> async(F&& f, Arg1&& arg1) {
       p.set_exception(std::current_exception());
     }
   }).detach();
-  
+
   return result;
 }
 
 template<typename F, typename Arg1, typename Arg2>
 future<detail::callable_ret_type<F, Arg1, Arg2>> async(F&& f, Arg1&& arg1, Arg2&& arg2) {
   using future_inner_type = detail::callable_ret_type<F, Arg1, Arg2>;
-  
+
   promise<future_inner_type> p;
   auto result = p.get_future();
-  
+
   std::thread([p = std::move(p), f = std::forward<F>(f), arg1, arg2] () mutable {
     try {
       p.set_value(std::forward<F>(f)(arg1, arg2));
@@ -763,14 +772,14 @@ future<detail::callable_ret_type<F, Arg1, Arg2>> async(F&& f, Arg1&& arg1, Arg2&
       p.set_exception(std::current_exception());
     }
   }).detach();
-  
+
   return result;
 }
 
 template<typename Executor, typename F>
 future<detail::callable_ret_type<F>> async(Executor& executor, F&& f) {
   using future_inner_type = detail::callable_ret_type<F>;
-  
+
   auto promise_ptr = std::make_shared<promise<future_inner_type>>();
   auto result = promise_ptr->get_future();
   executor.post([promise_ptr, f = std::forward<F>(f)] () mutable {
@@ -780,14 +789,14 @@ future<detail::callable_ret_type<F>> async(Executor& executor, F&& f) {
       promise_ptr->set_exception(std::current_exception());
     }
   });
-  
+
   return result;
 }
 
 template<typename Executor, typename F, typename Arg1>
 future<detail::callable_ret_type<F, Arg1>> async(Executor& executor, F&& f, Arg1&& arg1) {
   using future_inner_type = detail::callable_ret_type<F, Arg1>;
-  
+
   auto promise_ptr = std::make_shared<promise<future_inner_type>>();
   auto result = promise_ptr->get_future();
   executor.post([promise_ptr, f = std::forward<F>(f), arg1] () mutable {
@@ -797,7 +806,7 @@ future<detail::callable_ret_type<F, Arg1>> async(Executor& executor, F&& f, Arg1
       promise_ptr->set_exception(std::current_exception());
     }
   });
-  
+
   return result;
 }
 
@@ -805,7 +814,7 @@ template<typename Executor, typename F, typename Arg1, typename Arg2>
 future<detail::callable_ret_type<F, Arg1, Arg2>>
 async(Executor& executor, F&& f, Arg1&& arg1, Arg2&& arg2) {
   using future_inner_type = detail::callable_ret_type<F, Arg1, Arg2>;
-  
+
   auto promise_ptr = std::make_shared<promise<future_inner_type>>();
   auto result = promise_ptr->get_future();
   executor.post([promise_ptr, f = std::forward<F>(f), arg1, arg2] () mutable {
@@ -815,21 +824,21 @@ async(Executor& executor, F&& f, Arg1&& arg1, Arg2&& arg2) {
       promise_ptr->set_exception(std::current_exception());
     }
   });
-  
+
   return result;
 }
 #endif
 
 #if defined (__clang__) || defined(_MSC_VER) || \
     (defined (__GNUC__) && ((__GNUC__ == 4 && __GNUC_MINOR__ >= 9) || __GNUC__ >= 5))
-  
+
 template<typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
-  
+
   promise<future_inner_type> p;
   auto result = p.get_future();
-  
+
   std::thread([p = std::move(p), f = std::forward<F>(f), args...] () mutable {
     try {
       p.set_value(std::forward<F>(f)(args...));
@@ -837,14 +846,14 @@ future<detail::callable_ret_type<F, Args...>> async(F&& f, Args&&... args) {
       p.set_exception(std::current_exception());
     }
   }).detach();
-  
+
   return result;
 }
 
 template<typename Executor, typename F, typename... Args>
 future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, Args&&... args) {
   using future_inner_type = detail::callable_ret_type<F, Args...>;
-  
+
   auto promise_ptr = std::make_shared<promise<future_inner_type>>();
   auto result = promise_ptr->get_future();
   executor.post([promise_ptr, f = std::forward<F>(f), args...] () mutable {
@@ -854,7 +863,7 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
       promise_ptr->set_exception(std::current_exception());
     }
   });
-  
+
   return result;
 }
 #endif
@@ -864,9 +873,9 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
 template<typename InputIt>
 auto when_all(InputIt first, InputIt last)
 -> future<std::vector<typename std::iterator_traits<InputIt>::value_type>> {
-  using result_inner_type = 
+  using result_inner_type =
     std::vector<typename std::iterator_traits<InputIt>::value_type>;
-  
+
   struct context {
     size_t total_futures = 0;
     size_t ready_futures = 0;
@@ -874,17 +883,17 @@ auto when_all(InputIt first, InputIt last)
     std::mutex mutex;
     promise<result_inner_type> p;
   };
-  
+
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
   shared_context->result.reserve(shared_context->total_futures);
   size_t index = 0;
-  
+
   for (; first != last; ++first, ++index) {
     shared_context->result.push_back(std::move(*first));
     shared_context->result[index].then(
-    [shared_context, index] 
+    [shared_context, index]
     (typename std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
@@ -896,7 +905,7 @@ auto when_all(InputIt first, InputIt last)
       return unit();
     });
   }
-  
+
   return result_future;
 }
 
@@ -956,7 +965,7 @@ auto when_any(InputIt first, InputIt last)
   using result_inner_type =
     std::vector<typename std::iterator_traits<InputIt>::value_type>;
   using future_inner_type = when_any_result<result_inner_type>;
-  
+
   struct context {
     size_t total = 0;
     std::atomic<size_t> processed;
@@ -966,19 +975,19 @@ auto when_any(InputIt first, InputIt last)
     bool result_moved = false;
     std::mutex mutex;
   };
-  
+
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->processed = 0;
   shared_context->total = std::distance(first, last);
   shared_context->result.sequence.reserve(shared_context->total);
   size_t index = 0;
-  
+
   auto first_copy = first;
   for (; first_copy != last; ++first_copy) {
     shared_context->result.sequence.push_back(std::move(*first_copy));
   }
-  
+
   for (; first != last; ++first, ++index) {
     shared_context->result.sequence[index].then(
     [shared_context, index]
@@ -1000,7 +1009,7 @@ auto when_any(InputIt first, InputIt last)
     });
     ++shared_context->processed;
   }
-  
+
   {
     std::lock_guard<std::mutex> lock(shared_context->mutex);
     if (shared_context->ready && !shared_context->result_moved) {
@@ -1008,7 +1017,7 @@ auto when_any(InputIt first, InputIt last)
       shared_context->result_moved = true;
     }
   }
-  
+
   return result_future;
 }
 
@@ -1064,7 +1073,7 @@ auto when_any(Futures&&... futures)
 -> future<when_any_result<std::tuple<std::decay_t<Futures>...>>> {
   using result_inner_type = std::tuple<std::decay_t<Futures>...>;
   using future_inner_type = when_any_result<result_inner_type>;
-  
+
   struct context {
     bool ready = false;
     bool result_moved = false;
@@ -1074,11 +1083,11 @@ auto when_any(Futures&&... futures)
     promise<future_inner_type> p;
     std::mutex mutex;
   };
-  
+
   auto shared_context = std::make_shared<context>();
   shared_context->processed = 0;
   shared_context->total = sizeof...(futures);
-  
+
   detail::fill_result_helper<0>(shared_context, std::forward<Futures>(futures)...);
   detail::when_any_helper_struct<0, sizeof...(futures)>::apply(
       shared_context, shared_context->result.sequence);
