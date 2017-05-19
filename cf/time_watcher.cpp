@@ -7,6 +7,8 @@ time_watcher::time_watcher()
   watcher_thread_ = std::thread([this] {
     while (!need_stop_) {
       std::unique_lock<std::mutex> lock(mutex_);
+      if (!record_set_.empty())
+        wakeup_time_ = record_set_.begin()->time;
       while (!need_stop_ && !time_has_come()) {
         cond_.wait_until(lock, wakeup_time_);
         if (!time_has_come() && !record_set_.empty()) {

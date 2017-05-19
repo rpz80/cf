@@ -95,7 +95,7 @@ enum class errc {
 
 #define STRING_APPLY(value) case errc::value: return #value;
 
-std::string errc_string(errc value) {
+inline std::string errc_string(errc value) {
   switch (value) {
     ERRC_LIST(STRING_APPLY)
   };
