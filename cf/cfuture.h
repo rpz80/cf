@@ -160,15 +160,18 @@ public:
   void set_ready(std::unique_lock<std::mutex>& lock) {
     satisfied_ = true;
     cond_.notify_all();
-    if (cb_.empty())
+    if (cb_.empty()) {
       return;
+    }
     bool need_execute = !executed_;
-    if (!need_execute)
+    if (!need_execute) {
       return;
+    }
     executed_ = true;
     lock.unlock();
-    if (need_execute)
+    if (need_execute) {
       cb_();
+    }
   }
 
   template<typename F>
@@ -180,8 +183,9 @@ public:
       return;
     executed_ = true;
     lock.unlock();
-    if (need_execute)
+    if (need_execute) {
       cb_();
+    }
   }
 
   bool is_ready() const {
@@ -433,6 +437,9 @@ private:
   detail::shared_state_ptr<T> state_;
 };
 
+template<typename T>
+future<T> make_exceptional_future(std::exception_ptr p);
+
 // TODO: shared_future
 // TODO: T& specialization. Forbid and test.
 
@@ -481,23 +488,28 @@ future<T>::then_impl(F&& f) {
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = std::weak_ptr<S>(this->state_->shared_from_this())] () mutable {
     auto sp_state = state.lock();
-    if (sp_state->has_exception())
-      p.set_exception(sp_state->get_exception());
-    else {
-      try {
-        auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
-        inner_f.then([p = std::move(p)] (cf::future<R> f) mutable {
-          try {
-            p.set_value(f.get());
-          } catch (...) {
-            p.set_exception(std::current_exception());
-          }
-          return cf::unit();
-        });
-      } catch (...) {
-        p.set_exception(std::current_exception());
-      }
+    cf::future<T> arg_future;
+
+    if (sp_state->has_exception()) {
+      arg_future = cf::make_exceptional_future<T>(sp_state->get_exception());
+    } else {
+      arg_future = cf::make_ready_future<T>(sp_state->get_value());
     }
+
+    try {
+      auto inner_f = f(std::move(arg_future));
+      inner_f.then([p = std::move(p)] (cf::future<R> f) mutable {
+        try {
+          p.set_value(f.get());
+        } catch (...) {
+          p.set_exception(std::current_exception());
+        }
+        return cf::unit();
+      });
+    } catch (...) {
+      p.set_exception(std::current_exception());
+    }
+
   });
 
   return ret;
@@ -520,14 +532,18 @@ future<T>::then_impl(F&& f) {
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = std::weak_ptr<S>(this->state_->shared_from_this())] () mutable {
     auto sp_state = state.lock();
-    if (sp_state->has_exception())
-      p.set_exception(sp_state->get_exception());
-    else {
-      try {
-        p.set_value(f(cf::make_ready_future<T>(sp_state->get_value())));
-      } catch (...) {
-        p.set_exception(std::current_exception());
-      }
+    cf::future<T> arg_future;
+
+    if (sp_state->has_exception()) {
+      arg_future = cf::make_exceptional_future<T>(sp_state->get_exception());
+    } else {
+      arg_future = cf::make_ready_future<T>(sp_state->get_value());
+    }
+
+    try {
+      p.set_value(f(std::move(arg_future)));
+    } catch (...) {
+      p.set_exception(std::current_exception());
     }
   });
 
@@ -553,26 +569,32 @@ future<T>::then_impl(F&& f, Executor& executor) {
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = std::weak_ptr<S>(this->state_->shared_from_this()), &executor] () mutable {
     auto sp_state = state.lock();
-    if (sp_state->has_exception())
-      p.set_exception(sp_state->get_exception());
-    else {
-      auto promise_ptr = std::make_shared<promise<R>>(std::move(p));
-      executor.post([promise_ptr, sp_state = sp_state, f = std::forward<F>(f), &executor] () mutable {
-        try {
-          auto inner_f = f(cf::make_ready_future<T>(sp_state->get_value()));
-          inner_f.then(executor, [promise_ptr] (cf::future<R> f) mutable {
-            try {
-              promise_ptr->set_value(f.get());
-            } catch (...) {
-              promise_ptr->set_exception(std::current_exception());
-            }
-            return cf::unit();
-          });
-        } catch (...) {
-          promise_ptr->set_exception(std::current_exception());
-        }
-      });
+    cf::future<T> arg_future;
+
+    if (sp_state->has_exception()) {
+      arg_future = cf::make_exceptional_future<T>(sp_state->get_exception());
+    } else {
+      arg_future = cf::make_ready_future<T>(sp_state->get_value());
     }
+
+    auto promise_ptr = std::make_shared<promise<R>>(std::move(p));
+    auto arg_future_ptr = std::make_shared<future<T>>(std::move(arg_future));
+
+    executor.post([promise_ptr, arg_future_ptr, f = std::forward<F>(f), &executor] () mutable {
+      try {
+        auto inner_f = f(std::move(*arg_future_ptr));
+        inner_f.then(executor, [promise_ptr] (cf::future<R> f) mutable {
+          try {
+            promise_ptr->set_value(f.get());
+          } catch (...) {
+            promise_ptr->set_exception(std::current_exception());
+          }
+          return cf::unit();
+        });
+      } catch (...) {
+        promise_ptr->set_exception(std::current_exception());
+      }
+    });
   });
 
   return ret;
@@ -595,25 +617,32 @@ future<T>::then_impl(F&& f, Executor& executor) {
   set_callback([p = std::move(p), f = std::forward<F>(f),
                state = std::weak_ptr<S>(this->state_->shared_from_this()), &executor] () mutable {
     auto sp_state = state.lock();
-    if (sp_state->has_exception())
-      p.set_exception(sp_state->get_exception());
-    else {
-      struct local_state {
-        promise<R> p;
-        F f;
-        local_state(promise<R> p, F f)
-          : p(std::move(p)),
-            f(std::move(f)) {}
-      };
-      auto lstate = std::make_shared<local_state>(std::move(p), std::move(f));
-      executor.post([sp_state, lstate] () mutable {
-        try {
-          lstate->p.set_value(lstate->f(cf::make_ready_future<T>(sp_state->get_value())));
-        } catch (...) {
-          lstate->p.set_exception(std::current_exception());
-        }
-      });
+    cf::future<T> arg_future;
+
+    if (sp_state->has_exception()) {
+      arg_future = cf::make_exceptional_future<T>(sp_state->get_exception());
+    } else {
+      arg_future = cf::make_ready_future<T>(sp_state->get_value());
     }
+
+    struct local_state {
+      promise<R> p;
+      F f;
+      local_state(promise<R> p, F f)
+        : p(std::move(p)),
+          f(std::move(f)) {}
+    };
+
+    auto lstate = std::make_shared<local_state>(std::move(p), std::move(f));
+    auto arg_future_ptr = std::make_shared<future<T>>(std::move(arg_future));
+
+    executor.post([arg_future_ptr, lstate] () mutable {
+      try {
+        lstate->p.set_value(lstate->f(std::move(*arg_future_ptr)));
+      } catch (...) {
+        lstate->p.set_exception(std::current_exception());
+      }
+    });
   });
 
   return ret;

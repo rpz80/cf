@@ -337,10 +337,12 @@ TEST_CASE("Exceptions") {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       throw std::runtime_error("Exception");
       return std::string("Hello");
-    }).then([] (cf::future<std::string>) {
+    }).then([] (cf::future<std::string> f) {
+      f.get();
       REQUIRE(false);
       return cf::unit();
-    }).then([] (cf::future<cf::unit>) {
+    }).then([] (cf::future<cf::unit> f) {
+      f.get();
       REQUIRE(false);
       return cf::unit();
     });
@@ -359,10 +361,12 @@ TEST_CASE("Exceptions") {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       throw std::runtime_error("Exception");
       return std::string("Hello");
-    }).then(executor, [] (cf::future<std::string>) {
+    }).then(executor, [] (cf::future<std::string> f) {
+      f.get();
       REQUIRE(false);
       return cf::unit();
-    }).then(executor, [] (cf::future<cf::unit>) {
+    }).then(executor, [] (cf::future<cf::unit> f) {
+      f.get();
       REQUIRE(false);
       return cf::unit();
     });
@@ -847,6 +851,21 @@ TEST_CASE("When all") {
       REQUIRE(when_all_result.size() == size);
       for (size_t i = 0; i < size; ++i) {
         REQUIRE(when_all_result[i].get() == i);
+      }
+    }
+
+    SECTION("Exception in callback") {
+      for (int i = 0; i < 1; ++i) {
+        vec.push_back(cf::async([i] {
+          throw std::runtime_error("Exception in callback");
+          return i;
+        }));
+      }
+      try {
+        auto ready_vec = cf::when_all(vec.begin(), vec.end()).get();
+        ready_vec[0].get();
+      } catch (const std::exception& e) {
+        std::cout << e.what() << std::endl;
       }
     }
   }
