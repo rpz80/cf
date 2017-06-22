@@ -53,7 +53,8 @@ try {
     auto resp = f.get();                     // And this time on the async_queued_executor context.
     process(resp.body());
     return cf::unit();                       // When you don't need result - use cf::unit.
-  }).then([] (cf::future<cf::unit>) {
+  }).then([] (cf::future<cf::unit> f) {
+    f.wait();                                // If f has exception inside, this line will let it out
     log() << "body processed" << std::endl;
   }).get();
 } catch (const std::exception& e) {
