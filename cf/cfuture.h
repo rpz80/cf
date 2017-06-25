@@ -541,7 +541,11 @@ future<T>::then_impl(F&& f) {
     }
 
     try {
-      p.set_value(f(std::move(arg_future)));
+      auto&& result = f(std::move(arg_future));
+      if (sp_state->has_exception())
+        p.set_exception(sp_state->get_exception());
+      else
+        p.set_value(std::move(result));
     } catch (...) {
       p.set_exception(std::current_exception());
     }
