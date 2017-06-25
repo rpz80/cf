@@ -1052,10 +1052,12 @@ auto when_any(InputIt first, InputIt last)
 }
 
 namespace detail {
-template<size_t I, typename Context, typename Future>
-void when_any_inner_helper(Context context, Future& f) {
+template<size_t I, typename Context>
+void when_any_inner_helper(Context context) {
+  using ith_future_type =
+    std::decay_t<decltype(std::get<I>(context->result.sequence))>;
   std::get<I>(context->result.sequence).then(
-  [context](Future f) {
+  [context](ith_future_type f) {
     std::lock_guard<std::mutex> lock(context->mutex);
     if (!context->ready) {
       context->ready = true;
@@ -1075,7 +1077,7 @@ template<size_t I, size_t S>
 struct when_any_helper_struct {
   template<typename Context, typename... Futures>
   static void apply(const Context& context, std::tuple<Futures...>& t) {
-    when_any_inner_helper<I>(context, std::get<I>(t));
+    when_any_inner_helper<I>(context);
     ++context->processed;
     when_any_helper_struct<I+1, S>::apply(context, t);
   }
@@ -1084,11 +1086,11 @@ struct when_any_helper_struct {
 template<size_t S>
 struct when_any_helper_struct<S, S> {
   template<typename Context, typename... Futures>
-  static void apply(const Context& context, std::tuple<Futures...>& t) {}
+  static void apply(const Context&, std::tuple<Futures...>&) {}
 };
 
 template<size_t I, typename Context>
-void fill_result_helper(const Context& context) {}
+void fill_result_helper(const Context&) {}
 
 template<size_t I, typename Context, typename FirstFuture, typename... Futures>
 void fill_result_helper(const Context& context, FirstFuture&& f, Futures&&... fs) {
