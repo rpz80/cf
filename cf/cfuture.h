@@ -640,9 +640,13 @@ future<T>::then_impl(F&& f, Executor& executor) {
     auto lstate = std::make_shared<local_state>(std::move(p), std::move(f));
     auto arg_future_ptr = std::make_shared<future<T>>(std::move(arg_future));
 
-    executor.post([arg_future_ptr, lstate] () mutable {
+    executor.post([arg_future_ptr, lstate, sp_state] () mutable {
       try {
-        lstate->p.set_value(lstate->f(std::move(*arg_future_ptr)));
+        auto&& result = lstate->f(std::move(*arg_future_ptr));
+        if (sp_state->has_exception())
+          lstate->p.set_exception(sp_state->get_exception());
+        else
+          lstate->p.set_value(std::move(result));
       } catch (...) {
         lstate->p.set_exception(std::current_exception());
       }
@@ -912,6 +916,7 @@ auto when_all(InputIt first, InputIt last)
   struct context {
     size_t total_futures = 0;
     size_t ready_futures = 0;
+    std::exception_ptr exception = nullptr;
     result_inner_type result;
     std::mutex mutex;
     promise<result_inner_type> p;
@@ -930,10 +935,20 @@ auto when_all(InputIt first, InputIt last)
     (typename std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
-        shared_context->result[index] = std::move(f);
         ++shared_context->ready_futures;
-        if (shared_context->ready_futures == shared_context->total_futures)
-          shared_context->p.set_value(std::move(shared_context->result));
+        try {
+          shared_context->result[index] = std::move(cf::make_ready_future(f.get()));
+        } catch (...) {
+          shared_context->result[index] = 
+            cf::make_exceptional_future<decltype(f.get())>(std::current_exception());
+          shared_context->exception = std::current_exception();
+        }
+        if (shared_context->ready_futures == shared_context->total_futures) {
+          if (shared_context->exception)
+            shared_context->p.set_exception(shared_context->exception);
+          else
+            shared_context->p.set_value(std::move(shared_context->result));
+        }
       }
       return unit();
     });
@@ -974,6 +989,7 @@ auto when_all(Futures&&... futures)
   struct context {
     size_t total_futures;
     size_t ready_futures = 0;
+    std::exception_ptr exception = nullptr;
     result_inner_type result;
     promise<result_inner_type> p;
     std::mutex mutex;

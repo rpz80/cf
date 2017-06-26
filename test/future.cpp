@@ -13,8 +13,6 @@ int foo(const cf::future<char>&);
 double foo1(cf::future<int>);
 cf::future<double> foo3(cf::future<int>);
 
-auto foo2 = [](const cf::future<bool>&) { return 0; };
-
 struct baz { };
 struct test_struct {
   cf::unit bar1(cf::future<baz>) {return cf::unit(); };
@@ -39,13 +37,16 @@ TEST_CASE("Types") {
   SECTION("Callable return type") {
     test_struct ts;
     auto ts_bar1 = std::bind(&test_struct::bar1, &ts, std::placeholders::_1);
+    auto lambda = [](const cf::future<bool>&) { return 0; };
+    lambda(cf::make_ready_future<bool>(true));
+    using lambda_type = decltype(lambda);
 
     REQUIRE((std::is_same<int, cf::detail::
         then_arg_ret_type<char, decltype(foo)>>::value) == true);
     REQUIRE((std::is_same<double, cf::detail::
         then_arg_ret_type<int, decltype(foo1)>>::value) == true);
     REQUIRE((std::is_same<int, cf::detail::
-        then_arg_ret_type<bool, decltype(foo2)>>::value) == true);
+        then_arg_ret_type<bool, lambda_type>>::value) == true);
     REQUIRE((std::is_same<cf::unit, cf::detail::
         then_arg_ret_type<baz, decltype(ts_bar1)>>::value) == true);
     REQUIRE((std::is_same<cf::future<double>, cf::detail::
@@ -337,16 +338,13 @@ TEST_CASE("Exceptions") {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       throw std::runtime_error("Exception");
       return std::string("Hello");
-    }).then([] (cf::future<std::string> f) {
-      f.get();
-      REQUIRE(false);
+    }).then([] (cf::future<std::string>) {
       return cf::unit();
     }).then([] (cf::future<cf::unit> f) {
       f.get();
       REQUIRE(false);
       return cf::unit();
     });
-    REQUIRE(!f.is_ready());
     try {
       f.get();
       REQUIRE(false);
@@ -786,7 +784,7 @@ TEST_CASE("Executors") {
       cf::async_thread_pool_executor executor(5);
       cf::future<int> f = cf::make_ready_future(0);
 
-      for (size_t i = 0; i < 10; ++i) {
+      for (int i = 0; i < 10; ++i) {
         f = f.then(executor, [i](cf::future<int> f) {
           std::this_thread::sleep_for(std::chrono::milliseconds(5 * (i + 3)));
           int val = f.get();
@@ -840,7 +838,7 @@ TEST_CASE("When all") {
       REQUIRE(when_all_result.size() == size);
 
       for (size_t i = 0; i < size; ++i)
-        REQUIRE(when_all_result[i].get() == i);
+        REQUIRE(when_all_result[i].get() == (int)i);
     }
 
     SECTION("Ready futures") {
@@ -850,7 +848,7 @@ TEST_CASE("When all") {
       auto when_all_result = cf::when_all(vec.begin(), vec.end()).get();
       REQUIRE(when_all_result.size() == size);
       for (size_t i = 0; i < size; ++i) {
-        REQUIRE(when_all_result[i].get() == i);
+        REQUIRE(when_all_result[i].get() == (int)i);
       }
     }
 
