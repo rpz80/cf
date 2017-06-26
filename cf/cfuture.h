@@ -916,7 +916,6 @@ auto when_all(InputIt first, InputIt last)
   struct context {
     size_t total_futures = 0;
     size_t ready_futures = 0;
-    std::exception_ptr exception = nullptr;
     result_inner_type result;
     std::mutex mutex;
     promise<result_inner_type> p;
@@ -935,20 +934,10 @@ auto when_all(InputIt first, InputIt last)
     (typename std::iterator_traits<InputIt>::value_type f) mutable {
       {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
+        shared_context->result[index] = std::move(f);
         ++shared_context->ready_futures;
-        try {
-          shared_context->result[index] = std::move(cf::make_ready_future(f.get()));
-        } catch (...) {
-          shared_context->result[index] = 
-            cf::make_exceptional_future<decltype(f.get())>(std::current_exception());
-          shared_context->exception = std::current_exception();
-        }
-        if (shared_context->ready_futures == shared_context->total_futures) {
-          if (shared_context->exception)
-            shared_context->p.set_exception(shared_context->exception);
-          else
+        if (shared_context->ready_futures == shared_context->total_futures)
             shared_context->p.set_value(std::move(shared_context->result));
-        }
       }
       return unit();
     });
