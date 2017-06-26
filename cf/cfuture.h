@@ -978,7 +978,6 @@ auto when_all(Futures&&... futures)
   struct context {
     size_t total_futures;
     size_t ready_futures = 0;
-    std::exception_ptr exception = nullptr;
     result_inner_type result;
     promise<result_inner_type> p;
     std::mutex mutex;
