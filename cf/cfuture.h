@@ -541,7 +541,11 @@ future<T>::then_impl(F&& f) {
     }
 
     try {
-      p.set_value(f(std::move(arg_future)));
+      auto&& result = f(std::move(arg_future));
+      if (sp_state->has_exception())
+        p.set_exception(sp_state->get_exception());
+      else
+        p.set_value(std::move(result));
     } catch (...) {
       p.set_exception(std::current_exception());
     }
@@ -636,9 +640,13 @@ future<T>::then_impl(F&& f, Executor& executor) {
     auto lstate = std::make_shared<local_state>(std::move(p), std::move(f));
     auto arg_future_ptr = std::make_shared<future<T>>(std::move(arg_future));
 
-    executor.post([arg_future_ptr, lstate] () mutable {
+    executor.post([arg_future_ptr, lstate, sp_state] () mutable {
       try {
-        lstate->p.set_value(lstate->f(std::move(*arg_future_ptr)));
+        auto&& result = lstate->f(std::move(*arg_future_ptr));
+        if (sp_state->has_exception())
+          lstate->p.set_exception(sp_state->get_exception());
+        else
+          lstate->p.set_value(std::move(result));
       } catch (...) {
         lstate->p.set_exception(std::current_exception());
       }
@@ -929,7 +937,7 @@ auto when_all(InputIt first, InputIt last)
         shared_context->result[index] = std::move(f);
         ++shared_context->ready_futures;
         if (shared_context->ready_futures == shared_context->total_futures)
-          shared_context->p.set_value(std::move(shared_context->result));
+            shared_context->p.set_value(std::move(shared_context->result));
       }
       return unit();
     });
