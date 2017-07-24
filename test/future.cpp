@@ -104,7 +104,7 @@ TEST_CASE("Future") {
 
           REQUIRE(!future.valid());
           REQUIRE(future1.valid());
-          REQUIRE_THROWS(future1.get());
+          REQUIRE_NOTHROW(future1.get());
         }
       }
 
