@@ -18,6 +18,10 @@ public:
     stop();
   }
 
+  bool is_this_thread() {
+    return std::this_thread::get_id() == thread_.get_id();
+  }
+
   void post(const detail::task_type& f) {
     std::lock_guard<std::mutex> lock(mutex_);
     tasks_.push(f);
