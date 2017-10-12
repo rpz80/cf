@@ -51,23 +51,24 @@ class async_thread_pool_executor {
     }
 
     void post(
-      const detail::task_type& task,
-      const detail::task_type& completion_cb) {
+      detail::task_type task,
+      detail::task_type completion_cb) {
       std::unique_lock<std::mutex> lock(m_);
       if (task_)
         throw std::logic_error("Worker already has a pending task");
-      start_task(task, completion_cb);
+      start_task(std::move(task), std::move(completion_cb));
     }
 
   private:
     void start_task(
-      const detail::task_type& task,
-      const detail::task_type& completion_cb) {
+      detail::task_type task,
+      detail::task_type completion_cb) {
       has_task_ = true;
-      task_ = task;
-      completion_cb_ = completion_cb;
+      task_ = std::move(task);
+      completion_cb_ = std::move(completion_cb);
       start_cond_.notify_one();
-    }  private:
+    }
+  private:
     std::thread thread_;
     mutable std::mutex m_;
     bool need_stop_ = {false};
@@ -99,10 +100,10 @@ public:
           });
           if (ready_it == tp_.end())
             break;
-          auto task = task_queue_.front();
+          auto task = std::move(task_queue_.front());
           task_queue_.pop();
           --available_count_;
-          ready_it->post(task, [this] {
+          ready_it->post(std::move(task), [this] {
             ++available_count_;
             cond_.notify_one();
           });
@@ -128,10 +129,10 @@ public:
     return (size_t)available_count_;
   }
 
-  void post(const detail::task_type& task) {
+  void post(detail::task_type task) {
     {
       std::unique_lock<std::mutex> lock(mutex_);
-      task_queue_.push(task);
+      task_queue_.push(std::move(task));
     }
     cond_.notify_one();
   }

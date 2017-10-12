@@ -22,9 +22,9 @@ public:
     return std::this_thread::get_id() == thread_.get_id();
   }
 
-  void post(const detail::task_type& f) {
+  void post(detail::task_type f) {
     std::lock_guard<std::mutex> lock(mutex_);
-    tasks_.push(f);
+    tasks_.push(std::move(f));
     cond_.notify_all();
   }
 
@@ -47,7 +47,7 @@ private:
         if (need_stop_)
           break;
         while (!tasks_.empty()) {
-          auto f = tasks_.front();
+          auto f = std::move(tasks_.front());
           tasks_.pop();
           lock.unlock();
           f();

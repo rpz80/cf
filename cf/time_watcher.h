@@ -13,10 +13,9 @@ class time_watcher {
   struct record {
     std::chrono::time_point<std::chrono::steady_clock> time;
     detail::task_type task;
-    record(std::chrono::milliseconds timeout,
-           const detail::task_type& task)
+    record(std::chrono::milliseconds timeout, detail::task_type task)
     : time(std::chrono::steady_clock::now() + timeout),
-      task(task) {}
+      task(std::move(task)) {}
   };
 
   friend bool operator < (const record& lhs, const record& rhs) {
@@ -57,9 +56,9 @@ public:
       watcher_thread_.join();
   }
 
-  void add(const detail::task_type& task, std::chrono::milliseconds timeout) {
+  void add(detail::task_type task, std::chrono::milliseconds timeout) {
     std::lock_guard<std::mutex> lock(mutex_);
-    record_set_.emplace(timeout, task);
+    record_set_.emplace(timeout, std::move(task));
     cond_.notify_one();
   }
 

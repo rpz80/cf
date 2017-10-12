@@ -15,7 +15,7 @@ cf::future<double> foo3(cf::future<int>);
 
 struct baz { };
 struct test_struct {
-  cf::unit bar1(cf::future<baz>) {return cf::unit(); };
+  cf::unit bar1(cf::future<baz>) { return cf::unit(); }
 };
 
 template<typename Clock>
