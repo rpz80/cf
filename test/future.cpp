@@ -13,7 +13,11 @@ int foo(const cf::future<char>&);
 double foo1(cf::future<int>);
 cf::future<double> foo3(cf::future<int>);
 
-struct baz { };
+struct baz {
+  baz() = default;
+  baz(int v) : v_(v) {}
+  int v_;
+};
 struct test_struct {
   cf::unit bar1(cf::future<baz>) { return cf::unit(); }
 };
@@ -660,6 +664,13 @@ TEST_CASE("Make future functions") {
     REQUIRE(f.is_ready());
     REQUIRE(f.valid());
     REQUIRE(f.get() == 42);
+  }
+
+  SECTION("Make ready baz") {
+    cf::future<baz> f = cf::make_ready_future(baz{1});
+    REQUIRE(f.is_ready());
+    REQUIRE(f.valid());
+    REQUIRE(f.get().v_ == 1);
   }
 
   SECTION("Make excetion")
