@@ -272,6 +272,8 @@ struct future_held_type<future<T>> {
 
 template<typename T>
 class future {
+  static_assert(std::is_default_constructible<T>::value, "T must be default-constructible");
+
   template<typename U>
   friend class promise;
 
