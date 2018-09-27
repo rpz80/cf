@@ -616,9 +616,10 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
                              TimeWatcher& watcher) {
   auto promise_ptr = std::make_shared<promise<T>>();
   future<T> ret = promise_ptr->get_future();
+  using S = typename std::remove_reference<decltype(*this->state_)>::type;
 
   watcher.add([promise_ptr,
-               state = this->state_->shared_from_this(),
+               state = state_->shared_from_this(),
                exception] () mutable {
     std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
     if (state->expired() == timeout_state::result_set)
@@ -627,15 +628,17 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
     promise_ptr->set_exception(std::make_exception_ptr(exception));
   }, duration);
 
-  set_callback([promise_ptr, state = this->state_->shared_from_this()] () mutable {
-    std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
-    if (state->expired() == timeout_state::expired)
+  set_callback([promise_ptr,
+                state = std::weak_ptr<S>(state_->shared_from_this())] () mutable {
+    auto sp_state = state.lock();
+    std::lock_guard<std::mutex> lock(sp_state->get_timeout_mutex());
+    if (sp_state->expired() == timeout_state::expired)
       return;
-    state->expired(timeout_state::result_set);
-    if (state->has_exception())
-      promise_ptr->set_exception(state->get_exception());
+    sp_state->expired(timeout_state::result_set);
+    if (sp_state->has_exception())
+      promise_ptr->set_exception(sp_state->get_exception());
     else {
-      promise_ptr->set_value(state->get_value());
+      promise_ptr->set_value(sp_state->get_value());
     }
   });
 

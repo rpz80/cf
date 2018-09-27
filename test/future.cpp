@@ -37,6 +37,36 @@ void measure(const std::chrono::time_point<Clock>& start_point,
 
 // TODO: get rid of timeout dependent tests. add expectations instead.
 
+#if defined (_TIMEOUT_LEAK_TESTS)
+TEST_CASE("Timeout memory leak") {
+    using namespace std::chrono_literals;
+    SECTION("Not triggered") {
+        cf::time_watcher tw;
+        for (int i = 0; i < 1000; ++i) {
+            cf::make_ready_future(10).timeout(10s, std::runtime_error("oops"), tw).get();
+            std::this_thread::sleep_for(100ms);
+        }
+    }
+    
+    SECTION("Triggered") {
+        cf::time_watcher tw;
+        for (int i = 0; i < 1000; ++i) {
+            std::cout << "i: " << i << std::this_thread::get_id() << std::endl;
+            try {
+                cf::async([](){
+                    std::cout << "in async" << std::endl;
+                    std::this_thread::sleep_for(2s);
+                    std::cout << "in async 2" << std::endl;
+                    return cf::unit();
+                }).timeout(500ms, std::runtime_error("oops"), tw).get();
+            } catch (const std::exception&){
+                std::cout << "in catch " << std::this_thread::get_id() << std::endl;
+            }
+        }
+    }
+}
+#endif // _TIMEOUT_LEAK_TESTS
+
 TEST_CASE("Types") {
   SECTION("Callable return type") {
     test_struct ts;
@@ -895,7 +925,7 @@ TEST_CASE("When any") {
 
     SECTION("Async") {
       for (size_t i = 0; i < size; ++i) {
-        vec.push_back(cf::async([i, size] {
+        vec.push_back(cf::async([i] {
           std::this_thread::sleep_for(std::chrono::milliseconds((size - i) * 30));
           return (int)i;
         }));
@@ -927,7 +957,7 @@ TEST_CASE("When any") {
     cf::async_thread_pool_executor executor(2);
 
     for (size_t i = 0; i < size; ++i) {
-      vec.push_back(cf::async(executor, [i, size] {
+      vec.push_back(cf::async(executor, [i] {
         std::this_thread::sleep_for(std::chrono::milliseconds((i+1) * 50));
         return (int)i;
       }));

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project("cf-root")
+project("cf")
 if (MSVC)
   set(CMAKE_CXX_FLAGS "/EHsc /bigobj")
 else()
