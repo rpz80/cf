@@ -54,13 +54,10 @@ TEST_CASE("Timeout memory leak") {
             std::cout << "i: " << i << std::this_thread::get_id() << std::endl;
             try {
                 cf::async([](){
-                    std::cout << "in async" << std::endl;
                     std::this_thread::sleep_for(2s);
-                    std::cout << "in async 2" << std::endl;
                     return cf::unit();
                 }).timeout(500ms, std::runtime_error("oops"), tw).get();
             } catch (const std::exception&){
-                std::cout << "in catch " << std::this_thread::get_id() << std::endl;
             }
         }
     }
