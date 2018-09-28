@@ -84,7 +84,6 @@ class future;
 
 namespace detail {
 
-template<typename Derived>
 class shared_state_base {
   using cb_type = movable_func<void()>;
 public:
@@ -200,10 +199,10 @@ protected:
 };
 
 template<typename T>
-class shared_state : public shared_state_base<shared_state<T>>,
+class shared_state : public shared_state_base,
                      public std::enable_shared_from_this<shared_state<T>> {
   using value_type = T;
-  using base_type = shared_state_base<shared_state<T>>;
+  using base_type = shared_state_base;
 
 public:
   template<typename U>
