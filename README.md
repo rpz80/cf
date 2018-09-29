@@ -1,8 +1,8 @@
 [![Build Status](https://travis-ci.org/rpz80/cf.svg?branch=master)](https://travis-ci.org/rpz80/cf)
 # Composable futures C++ library (Cf)
-This is an implementation of composable, continuing c++17 like std [futures](http://en.cppreference.com/w/cpp/experimental/concurrency#Continuations%20and%20other%20extensions%20for%20std::future). The most useful/interesting parts, as I personally see them, are ready. Some other, currently not implemented features, will come soon I hope, while the rest (like void future/promise specializations, launch policies) are not likely to ever emerge.
+This is an implementation of composable, continuing c++17 like std [futures](https://en.cppreference.com/w/cpp/experimental/concurrency).
 
-Cf library has no dependencies except c++14 compliant standard library. Cf library comes with a constantly growing unit test suit written using wonderful [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
+Cf library has no dependencies except c++14 compliant standard library. Cf library comes with a an extensive unit test suit written using [Catch](https://github.com/philsquared/Catch) testing framework. These tests may also be used as an a source of examples.
 
 Cf has been tested on three major OS's. Minimum compiler requirements are: gcc-4.8 (gcc-4.9 or above is strongly recommended), clang-3.7, vs2015.
 
