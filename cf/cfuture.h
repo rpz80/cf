@@ -12,6 +12,7 @@
 #include <vector>
 #include <iterator>
 #include <tuple>
+#include <string>
 #include "common.h"
 
 #if !defined(__clang__) && defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
