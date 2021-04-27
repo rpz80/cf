@@ -237,11 +237,19 @@ void check_state(const shared_state_ptr<T>& state) {
 // various type helpers
 
 // get the return type of a continuation callable
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
+template<typename T, typename F>
+using then_arg_ret_type = std::invoke_result_t<std::decay_t<F>, future<T>>;
+
+template<typename F, typename... Args>
+using callable_ret_type = std::invoke_result_t<std::decay_t<F>, Args...>;
+#else
 template<typename T, typename F>
 using then_arg_ret_type = std::result_of_t<std::decay_t<F>(future<T>)>;
 
 template<typename F, typename... Args>
 using callable_ret_type = std::result_of_t<std::decay_t<F>(Args...)>;
+#endif
 
 template<typename T>
 struct is_future {
