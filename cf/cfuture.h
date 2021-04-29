@@ -12,7 +12,8 @@
 #include <vector>
 #include <iterator>
 #include <tuple>
-#include <string>
+#include <system_error>
+
 #include "common.h"
 
 #if !defined(__clang__) && defined (__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ <= 8)
@@ -83,8 +84,12 @@ struct future_error : public std::exception {
 template<typename T>
 class future;
 
+template<typename T>
+future<T> make_ready_future(T&& t);
+
 namespace detail {
 
+template<typename Derived>
 class shared_state_base {
   using cb_type = movable_func<void()>;
 public:
@@ -200,10 +205,10 @@ protected:
 };
 
 template<typename T>
-class shared_state : public shared_state_base,
+class shared_state : public shared_state_base<shared_state<T>>,
                      public std::enable_shared_from_this<shared_state<T>> {
   using value_type = T;
-  using base_type = shared_state_base;
+  using base_type = shared_state_base<shared_state<T>>;
 
 public:
   template<typename U>
@@ -238,10 +243,10 @@ void check_state(const shared_state_ptr<T>& state) {
 
 // get the return type of a continuation callable
 template<typename T, typename F>
-using then_arg_ret_type = std::result_of_t<std::decay_t<F>(future<T>)>;
+using then_arg_ret_type = std::invoke_result_t<std::decay_t<F>, future<T>>;
 
 template<typename F, typename... Args>
-using callable_ret_type = std::result_of_t<std::decay_t<F>(Args...)>;
+using callable_ret_type = std::invoke_result_t<std::decay_t<F>, Args...>;
 
 template<typename T>
 struct is_future {
@@ -268,12 +273,64 @@ struct future_held_type<future<T>> {
   using type = std::decay_t<T>;
 };
 
+template<typename R>
+void arg_type(R(*)());
+
+template<typename R, typename A>
+A arg_type(R(*)(A));
+
+template<typename R, typename C>
+void arg_type(R(C::*)());
+
+template<typename R, typename C, typename A>
+A arg_type(R(C::*)(A));
+
+template<typename R, typename C>
+void arg_type(R(C::*)() const);
+
+template<typename R, typename C, typename A>
+A arg_type(R(C::*)(A) const);
+
+template<typename F>
+decltype(arg_type(&F::operator())) arg_type(F f);
+
+template<typename F>
+using arg_type_t = decltype(arg_type(std::declval<F>()));
+
+template<typename F>
+auto make_then_unwrap_handler(F&& f) {
+  return [f = std::forward<F>(f)](auto future) mutable {
+    return std::move(f)(future.get());
+  };
+}
+
+template<typename T, typename U>
+auto ensure_future(U&& u) {
+  return make_ready_future<T>(std::forward<U>(u));
+}
+
+template<typename T>
+auto ensure_future(future<T> t) {
+    return t;
+}
+
+template<typename F>
+auto make_catch_handler(F&& f) {
+  return [f = std::forward<F>(f)](auto future) mutable {
+    using T = decltype(future.get());
+    using E = arg_type_t<std::decay_t<F>>;
+    try {
+      return make_ready_future<T>(future.get());
+    } catch (E e) {
+      return ensure_future<T>(std::move(f)(std::forward<E>(e)));
+    }
+  };
+}
+
 } // namespace detail
 
 template<typename T>
 class future {
-  static_assert(std::is_default_constructible<T>::value, "T must be default-constructible");
-
   template<typename U>
   friend class promise;
 
@@ -284,6 +341,8 @@ class future {
   friend future<U> make_exceptional_future(std::exception_ptr p);
 
 public:
+  using value_type = T;
+
   future() = default;
 
   future(const future<T>& other) = delete;
@@ -306,8 +365,19 @@ public:
     return state_->get_value();
   }
 
+  std::exception_ptr exception() const {
+      check_state(state_);
+      return state_->get_exception();
+  }
+
   template<typename F>
   detail::then_ret_type<T, F> then(F&& f);
+
+  template<typename F>
+  auto then_unwrap(F&& f);
+
+  template<typename F>
+  auto catch_(F&& f);
 
 template<typename Rep, typename Period, typename TimeWatcher, typename Exception>
 future<T> timeout(std::chrono::duration<Rep, Period> duration,
@@ -316,6 +386,12 @@ future<T> timeout(std::chrono::duration<Rep, Period> duration,
 
   template<typename F, typename Executor>
   detail::then_ret_type<T, F> then(Executor& executor, F&& f);
+
+  template<typename F, typename Executor>
+  auto then_unwrap(Executor& executor, F&& f);
+
+  template<typename F, typename Executor>
+  auto catch_(Executor& executor, F&& f);
 
   bool is_ready() const {
     check_state(state_);
@@ -410,6 +486,18 @@ detail::then_ret_type<T, F> future<T>::then(F&& f) {
 }
 
 template<typename T>
+template<typename F>
+auto future<T>::then_unwrap(F&& f) {
+  return then(detail::make_then_unwrap_handler(std::forward<F>(f)));
+}
+
+template<typename T>
+template<typename F>
+auto future<T>::catch_(F&& f) {
+  return then(detail::make_catch_handler(std::forward<F>(f)));
+}
+
+template<typename T>
 template<typename F, typename Executor>
 detail::then_ret_type<T, F> future<T>::then(Executor& executor, F&& f) {
   check_state(state_);
@@ -417,10 +505,19 @@ detail::then_ret_type<T, F> future<T>::then(Executor& executor, F&& f) {
 }
 
 template<typename T>
-class promise;
+template<typename F, typename Executor>
+auto future<T>::then_unwrap(Executor& executor, F&& f) {
+  return then(executor, detail::make_then_unwrap_handler(std::forward<F>(f)));
+}
 
 template<typename T>
-future<T> make_ready_future(T&& t);
+template<typename F, typename Executor>
+auto future<T>::catch_(Executor& executor, F&& f) {
+  return then(executor, detail::make_catch_handler(std::forward<F>(f)));
+}
+
+template<typename T>
+class promise;
 
 // future<R> F(future<T>) specialization
 template<typename T>
@@ -616,10 +713,9 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
                              TimeWatcher& watcher) {
   auto promise_ptr = std::make_shared<promise<T>>();
   future<T> ret = promise_ptr->get_future();
-  using S = typename std::remove_reference<decltype(*this->state_)>::type;
 
   watcher.add([promise_ptr,
-               state = state_->shared_from_this(),
+               state = this->state_->shared_from_this(),
                exception] () mutable {
     std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
     if (state->expired() == timeout_state::result_set)
@@ -628,17 +724,15 @@ future<T> future<T>::timeout(std::chrono::duration<Rep, Period> duration,
     promise_ptr->set_exception(std::make_exception_ptr(exception));
   }, duration);
 
-  set_callback([promise_ptr,
-                state = std::weak_ptr<S>(state_->shared_from_this())] () mutable {
-    auto sp_state = state.lock();
-    std::lock_guard<std::mutex> lock(sp_state->get_timeout_mutex());
-    if (sp_state->expired() == timeout_state::expired)
+  set_callback([promise_ptr, state = this->state_->shared_from_this()] () mutable {
+    std::lock_guard<std::mutex> lock(state->get_timeout_mutex());
+    if (state->expired() == timeout_state::expired)
       return;
-    sp_state->expired(timeout_state::result_set);
-    if (sp_state->has_exception())
-      promise_ptr->set_exception(sp_state->get_exception());
+    state->expired(timeout_state::result_set);
+    if (state->has_exception())
+      promise_ptr->set_exception(state->get_exception());
     else {
-      promise_ptr->set_value(sp_state->get_value());
+      promise_ptr->set_value(state->get_value());
     }
   });
 
@@ -861,42 +955,41 @@ future<detail::callable_ret_type<F, Args...>> async(Executor& executor, F&& f, A
 }
 #endif
 
-
-
 template<typename InputIt>
 auto when_all(InputIt first, InputIt last)
 -> future<std::vector<typename std::iterator_traits<InputIt>::value_type>> {
-  using result_inner_type =
-    std::vector<typename std::iterator_traits<InputIt>::value_type>;
+  using argument_element_type = typename std::iterator_traits<InputIt>::value_type;
+  using future_vector_type = std::vector<argument_element_type>;
 
   struct context {
     size_t total_futures = 0;
     size_t ready_futures = 0;
-    result_inner_type result;
+    future_vector_type future_vector;
+    future_vector_type result;
     std::mutex mutex;
-    promise<result_inner_type> p;
+    promise<future_vector_type> p;
   };
 
   auto shared_context = std::make_shared<context>();
   auto result_future = shared_context->p.get_future();
   shared_context->total_futures = std::distance(first, last);
-  shared_context->result.reserve(shared_context->total_futures);
+  shared_context->result.resize(shared_context->total_futures);
   size_t index = 0;
 
+  if (shared_context->total_futures == 0)
+    return cf::make_ready_future(future_vector_type());
+
   for (; first != last; ++first, ++index) {
-    shared_context->result.push_back(std::move(*first));
-    shared_context->result[index].then(
-    [shared_context, index]
-    (typename std::iterator_traits<InputIt>::value_type f) mutable {
-      {
+    shared_context->future_vector.emplace_back(std::move(*first));
+    shared_context->future_vector[index].then(
+      [shared_context, index](argument_element_type f) mutable {
         std::lock_guard<std::mutex> lock(shared_context->mutex);
         shared_context->result[index] = std::move(f);
         ++shared_context->ready_futures;
         if (shared_context->ready_futures == shared_context->total_futures)
-            shared_context->p.set_value(std::move(shared_context->result));
-      }
-      return unit();
-    });
+          shared_context->p.set_value(std::move(shared_context->result));
+        return unit();
+      });
   }
 
   return result_future;
@@ -908,13 +1001,13 @@ void when_inner_helper(Context context, Future&& f) {
   std::get<I>(context->result) = std::move(f);
   std::get<I>(context->result).then(
       [context](typename std::remove_reference<Future>::type f) {
-    std::lock_guard<std::mutex> lock(context->mutex);
-    ++context->ready_futures;
-    std::get<I>(context->result) = std::move(f);
-    if (context->ready_futures == context->total_futures)
-      context->p.set_value(std::move(context->result));
-    return unit();
-  });
+        std::lock_guard<std::mutex> lock(context->mutex);
+        ++context->ready_futures;
+        std::get<I>(context->result) = std::move(f);
+        if (context->ready_futures == context->total_futures)
+          context->p.set_value(std::move(context->result));
+        return unit();
+      });
 }
 
 template<size_t I, typename Context>
@@ -1062,6 +1155,14 @@ void fill_result_helper(const Context& context, FirstFuture&& f, Futures&&... fs
   fill_result_helper<I+1>(context, std::forward<Futures>(fs)...);
 }
 
+template<typename F>
+auto make_initiate_handler(F&& f) {
+  return [f = std::forward<F>(f)](auto future) mutable {
+    future.get();
+    return std::move(f)();
+  };
+}
+
 }
 
 template<typename... Futures>
@@ -1096,4 +1197,33 @@ auto when_any(Futures&&... futures)
   }
   return shared_context->p.get_future();
 }
+
+template<typename F>
+auto initiate(F&& f) {
+  return cf::make_ready_future(cf::unit()).then(
+    detail::make_initiate_handler(std::forward<F>(f)));
+}
+
+template<typename F, typename Executor>
+auto initiate(Executor& executor, F&& f) {
+  return cf::make_ready_future(cf::unit()).then(executor,
+    detail::make_initiate_handler(std::forward<F>(f)));
+}
+
+constexpr auto translate_broken_promise_to_operation_canceled = [](auto f) {
+  try {
+    return f.get();
+  } catch (const future_error& e) {
+    if (e.ecode() != errc::broken_promise)
+      throw;
+    throw std::system_error(
+      (int) std::errc::operation_canceled, std::generic_category());
+  }
+};
+
+constexpr auto discard_value = [](auto f) {
+  f.get();
+  return cf::unit();
+};
+
 } // namespace cf
